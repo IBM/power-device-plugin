@@ -1,6 +1,8 @@
 # Power Device Plugin
 
-Power Device Plugin to add protected devices into a non-privileged container. The Power Device Plugin uses the [Kubernetes Device Plugin](https://kubernetes.io/docs/concepts/extend-kubernetes/compute-storage-net/device-plugins/) in order to add specific devices to the given Pod.
+Power Device Plugin adds protected devices into a non-privileged container. The Power Device Plugin uses the [Kubernetes Device Plugin](https://kubernetes.io/docs/concepts/extend-kubernetes/compute-storage-net/device-plugins/) in order to add specific devices to the given Pod.
+
+The Power Device Plugin is a generic solution. The term Power refer to the IBM Power Systems where this solution was first created. The image is available for amd64, s390x and ppc64le.
 
 ## Steps
 
