@@ -4,20 +4,52 @@ Power Device Plugin to add protected devices into a non-privileged container. Th
 
 ## Steps
 
-### Device Plugin
+### Installation
 The device plugin only installs on the workers.
 
-1. To deploy the device plugin: 
+1. To deploy the device plugin using [kustomize](https://kustomize.io/): 
 
 ``` shell
-# kustomize build manifests | oc apply -f -
-
-project.project.openshift.io/power-device-plugin created
-serviceaccount/power-device-plugin created
-clusterrolebinding.rbac.authorization.k8s.io/power-device-plugin created
-daemonset.apps/power-device-plugin created
+# kustomize build manifests/ | oc apply -f -
 ```
 
+-or-
+
+1. Create the resources directly:
+
+``` shell
+oc apply -f manifests/00-project.yaml
+oc apply -f manifests/01-sa.yaml
+oc apply -f manifests/02-rbac.yaml
+oc apply -f manifests/03-daemonset.yaml
+```
+
+These resources need to be created by a user with ClusterAdmin privileges.
+
+### Uninstallation
+
+The device plugin only uninstalls from the workers.
+
+1. To undeploy the device plugin using [kustomize](https://kustomize.io/): 
+
+``` shell
+# kustomize build manifests/ | oc delete -f -
+```
+
+-or-
+
+1. Create the resources directly:
+
+``` shell
+oc delete -f manifests/00-project.yaml
+oc delete -f manifests/01-sa.yaml
+oc delete -f manifests/02-rbac.yaml
+oc delete -f manifests/03-daemonset.yaml
+```
+
+These resources need to be created by a user with ClusterAdmin privileges.
+
+## Debug
 #### Debug DaemonSet
 To debug the running plugin, you can use: 
 
