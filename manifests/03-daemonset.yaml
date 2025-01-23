@@ -59,13 +59,13 @@ spec:
         livenessProbe:
           exec:
             command:
-            - cat
+            - stat
             - /var/lib/kubelet/device-plugins/power-dev.csi.ibm.com-reg.sock
           initialDelaySeconds: 10
         readinessProbe:
           exec:
             command:
-            - cat
+            - stat
             - /var/lib/kubelet/device-plugins/power-dev.csi.ibm.com-reg.sock
           initialDelaySeconds: 5
           failureThreshold: 10
