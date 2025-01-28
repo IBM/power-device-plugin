@@ -2,7 +2,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: ex-device-plugin
-  namespace: ex-device-plugin
   labels:
     app: ex-device-plugin
 spec:
