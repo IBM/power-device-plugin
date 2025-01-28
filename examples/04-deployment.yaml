@@ -13,6 +13,8 @@ spec:
     metadata:
       labels:
         app: ex-device-plugin
+      annotations:
+        openshift.io/required-scc: 'hostmount-anyuid'
     spec:
       containers:
       - name: plugin
@@ -35,19 +37,19 @@ spec:
         serviceAccountName: ex-sa
         securityContext:
           privileged: false
+          runAsUser: 1000
           capabilities:
             drop:
               - ALL
           runAsNonRoot: true
           readOnlyRootFilesystem: true
           allowPrivilegeEscalation: false
-          seccompProfile:
-            type: RuntimeDefault
       serviceAccount: ex-sa
       serviceAccountName: ex-sa
       volumes:
         - name: test-vol
-          persistentVolumeClaim:
-            claimName: vol-test
+          hostPath:
+            path: /var/demo
+            type: DirectoryOrCreate
   updateStrategy:
     type: RollingUpdate
