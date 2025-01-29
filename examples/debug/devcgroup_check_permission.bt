@@ -1,0 +1,13 @@
+#ifndef BPFTRACE_HAVE_BTF
+#include <linux/kernel.h>
+#include <linux/module.h>
+#include <linux/kprobes.h>
+#endif
+
+kretprobe:devcgroup_check_permission {
+  printf("PID %d, comm %s returned %ld\n", pid, comm, retval);
+  printf("%s\n", kstack);
+}
+kprobe:devcgroup_check_permission {
+  printf("[%d-%s] %d %d:%d %d\n", pid, comm, arg0, arg1, arg2, arg3);
+}
