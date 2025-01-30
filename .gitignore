@@ -19,6 +19,10 @@
 !manifests/webhook/*.yaml
 !Makefile
 
+# Tests
+!tests/*.md
+!tests/*.sh
+
 # Image
 !build/Containerfile
 !build/Containerfile-build

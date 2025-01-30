@@ -13,7 +13,9 @@ on:
     paths-ignore:
       - 'manifests/**'
       - 'examples/**'
+      - 'tests/**'
       - 'README.md'
+      - '.gitignore'
 
 env:
   REGISTRY: quay.io
