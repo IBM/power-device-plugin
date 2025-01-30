@@ -49,10 +49,10 @@ spec:
           value: "info"
         resources:
           limits:
-            memory: 100Mi
+            memory: 10Mi
           requests:
-            cpu: 100m
-            memory: 100Mi
+            cpu: 10m
+            memory: 10Mi
         ports:
         - containerPort: 8080
           name: http
