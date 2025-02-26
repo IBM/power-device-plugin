@@ -15,6 +15,7 @@
 !examples/debug/README.md
 !examples/debug/*.bt
 !manifests/*.yaml
+!manifests/**/*.yaml
 !pkg/webhook/testdata/pod.json
 !manifests/webhook/*.yaml
 !Makefile

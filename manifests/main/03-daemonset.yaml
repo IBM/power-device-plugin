@@ -38,7 +38,7 @@ spec:
                 - s390x
       containers:
       - name: plugin
-        image: quay.io/powercloud/power-dev-plugin:v0.0.2
+        image: quay.io/powercloud/power-dev-plugin:main
         imagePullPolicy: IfNotPresent
         command: [ "/opt/power-dev-plugin/bin/power-dev-plugin" ]
         # Once this goes into production, we can turn the logging off
