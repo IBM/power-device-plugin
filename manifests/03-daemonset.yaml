@@ -17,8 +17,11 @@ spec:
       labels:
         app: power-device-plugin
     spec:
+      tolerations:
+      - key: node.kubernetes.io/out-of-service
+        operator: Exists
+        effect: NoExecute
       # Dev: we're only installing on workers.
-      # tolerations:
       # - key: node-role.kubernetes.io/control-plane
       #   operator: Exists
       #   effect: NoSchedule
@@ -41,18 +44,27 @@ spec:
         image: quay.io/powercloud/power-dev-plugin:v0.0.2
         imagePullPolicy: IfNotPresent
         command: [ "/opt/power-dev-plugin/bin/power-dev-plugin" ]
-        # Once this goes into production, we can turn the logging off
         env:
-        - name: GRPC_GO_LOG_VERBOSITY_LEVEL
-          value: "99"
-        - name: GRPC_GO_LOG_SEVERITY_LEVEL
-          value: "info"
+        - name: GOMEMLIMIT
+          valueFrom:
+            resourceFieldRef:
+              resource: limits.memory
+        - name: GOMAXPROCS
+          valueFrom:
+            resourceFieldRef:
+              resource: limits.cpu
+        # Once this goes into production, we can turn the logging off
+        #- name: GRPC_GO_LOG_VERBOSITY_LEVEL
+        #  value: "99"
+        #- name: GRPC_GO_LOG_SEVERITY_LEVEL
+        #  value: "info"
         resources:
           limits:
-            memory: 10Mi
+            cpu: 500m
+            memory: 100Mi
           requests:
-            cpu: 10m
-            memory: 10Mi
+            cpu: 100m
+            memory: 100Mi
         ports:
         - containerPort: 8080
           name: http
