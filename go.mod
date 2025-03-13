@@ -3,7 +3,7 @@ module github.com/ocp-power-demos/power-dev-plugin
 go 1.23.0
 
 require (
-	github.com/jaypipes/ghw v0.13.0
+	github.com/jaypipes/ghw v0.14.0
 	google.golang.org/grpc v1.69.4
 	k8s.io/klog v1.0.0
 	k8s.io/kubelet v0.32.2
@@ -18,6 +18,7 @@ require (
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/rogpeppe/go-internal v1.13.1 // indirect
+	github.com/samber/lo v1.47.0 // indirect
 	go.opentelemetry.io/otel v1.33.0 // indirect
 	golang.org/x/net v0.34.0 // indirect
 	golang.org/x/sys v0.29.0 // indirect
