@@ -6,7 +6,7 @@ toolchain go1.24.1
 
 require (
 	github.com/jaypipes/ghw v0.17.0
-	google.golang.org/grpc v1.72.1
+	google.golang.org/grpc v1.72.2
 	k8s.io/klog v1.0.0
 	k8s.io/kubelet v0.33.1
 )
