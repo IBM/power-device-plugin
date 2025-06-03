@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+metadata:
+  name: power-device-plugin
+  namespace: power-device-plugin
+
+generatorOptions:
+  disableNameSuffixHash: true
+
+sortOptions:
+  order: fifo
+
+resources:
+  - 00-project.yaml
+  - 01-sa.yaml
+  - 02-rbac.yaml
+  - 03-daemonset.yaml
