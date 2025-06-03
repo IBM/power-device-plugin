@@ -7,7 +7,7 @@ name: Create Container
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "development" ]
     # Publish semver tags as releases.
     tags: [ 'v*.*.*' ]
     paths-ignore:
