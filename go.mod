@@ -1,8 +1,8 @@
 module github.com/ocp-power-demos/power-dev-plugin
 
-go 1.24.0
+go 1.24.3
 
-toolchain go1.24.1
+toolchain go1.24.3
 
 require (
 	github.com/jaypipes/ghw v0.17.0
