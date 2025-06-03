@@ -178,32 +178,39 @@ func (p *PowerPlugin) Register(kubeletEndpoint, resourceName string) error {
 func (p *PowerPlugin) ListAndWatch(e *pluginapi.Empty, stream pluginapi.DevicePlugin_ListAndWatchServer) error {
 	klog.Infof("Listing devices: %v", p.devs)
 
+	// Initial scan if devices list is empty
 	if len(p.devs) == 0 {
 		devices, err := ScanRootForDevices()
 		if err != nil {
 			klog.Errorf("Scan root for devices was unsuccessful during ListAndWatch: %v", err)
 			return err
 		}
-
 		p.devs = devices
 		klog.Infof("Updating the devices to %d total devices", len(p.devs))
 	}
 
-	pluginDevices := convertDeviceToPluginDevices(p.devs)
-	klog.Infof("PluginDevices are: %s", pluginDevices)
-
-	stream.Send(&pluginapi.ListAndWatchResponse{Devices: pluginDevices})
+	// Always send device list at the beginning
+	if err := stream.Send(&pluginapi.ListAndWatchResponse{Devices: convertDeviceToPluginDevices(p.devs)}); err != nil {
+		klog.Errorf("Failed to send initial device list: %v", err)
+		return err
+	}
 
 	for {
 		select {
 		case <-p.stop:
 			klog.Infoln("Told to Stop...")
 			return nil
+
 		case d := <-p.health:
 			//ignoring unhealthy state.
 			klog.Infoln("Checking the health")
+			klog.Infof("Device health update received for %s", d.ID)
 			d.Health = pluginapi.Healthy
-			stream.Send(&pluginapi.ListAndWatchResponse{Devices: convertDeviceToPluginDevices(p.devs)})
+
+			if err := stream.Send(&pluginapi.ListAndWatchResponse{Devices: convertDeviceToPluginDevices(p.devs)}); err != nil {
+				klog.Errorf("Failed to send updated device health to kubelet: %v", err)
+				return err // Let kubelet re-initiate plugin
+			}
 		}
 	}
 }
