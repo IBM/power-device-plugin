@@ -42,7 +42,7 @@ spec:
       containers:
       - name: plugin
         image: quay.io/powercloud/power-dev-plugin:development
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: Always
         command: [ "/opt/power-dev-plugin/bin/power-dev-plugin" ]
         env:
         - name: GOMEMLIMIT
