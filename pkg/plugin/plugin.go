@@ -176,7 +176,7 @@ func (p *PowerPlugin) Register(kubeletEndpoint, resourceName string) error {
 
 // Lists devices and update that list according to the health status
 func (p *PowerPlugin) ListAndWatch(e *pluginapi.Empty, stream pluginapi.DevicePlugin_ListAndWatchServer) error {
-	klog.Infof("Listing devices: %v", p.devs)
+	klog.Infof("ListAndWatch: Listing devices: %v", p.devs)
 
 	// Initial scan if devices list is empty
 	if len(p.devs) == 0 {
@@ -194,11 +194,13 @@ func (p *PowerPlugin) ListAndWatch(e *pluginapi.Empty, stream pluginapi.DevicePl
 		klog.Errorf("Failed to send initial device list: %v", err)
 		return err
 	}
+	klog.Infof("ListAndWatch: for loop %v: ", p)
 
 	for {
 		select {
 		case <-p.stop:
 			klog.Infoln("Told to Stop...")
+			klog.Infof("ListAndWatch: Exit")
 			return nil
 
 		case d := <-p.health:
@@ -209,6 +211,7 @@ func (p *PowerPlugin) ListAndWatch(e *pluginapi.Empty, stream pluginapi.DevicePl
 
 			if err := stream.Send(&pluginapi.ListAndWatchResponse{Devices: convertDeviceToPluginDevices(p.devs)}); err != nil {
 				klog.Errorf("Failed to send updated device health to kubelet: %v", err)
+				klog.Infof("ListAndWatch: Exit")
 				return err // Let kubelet re-initiate plugin
 			}
 		}
