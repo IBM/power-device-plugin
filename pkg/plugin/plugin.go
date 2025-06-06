@@ -194,9 +194,10 @@ func (p *PowerPlugin) ListAndWatch(e *pluginapi.Empty, stream pluginapi.DevicePl
 		klog.Errorf("Failed to send initial device list: %v", err)
 		return err
 	}
-	klog.Infof("ListAndWatch: for loop %v: ", p)
+	klog.Infof("ListAndWatch: for loop %+v\n: ", p)
 
 	for {
+		klog.Infof("ListAndWatch: In for loop")
 		select {
 		case <-p.stop:
 			klog.Infoln("Told to Stop...")
