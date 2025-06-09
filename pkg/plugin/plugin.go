@@ -28,6 +28,7 @@ import (
 
 	"github.com/jaypipes/ghw"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"k8s.io/klog"
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
@@ -50,8 +51,9 @@ type PowerPlugin struct {
 	devs   []string
 	socket string
 
-	stop   chan interface{}
-	health chan *pluginapi.Device
+	stop    chan interface{}
+	health  chan *pluginapi.Device
+	restart chan struct{}
 
 	server *grpc.Server
 
@@ -63,10 +65,11 @@ func New() (*PowerPlugin, error) {
 	// Empty array to start.
 	var devs []string = []string{}
 	return &PowerPlugin{
-		devs:   devs,
-		socket: socket,
-		stop:   make(chan interface{}),
-		health: make(chan *pluginapi.Device),
+		devs:    devs,
+		socket:  socket,
+		stop:    make(chan interface{}),
+		health:  make(chan *pluginapi.Device),
+		restart: make(chan struct{}),
 	}, nil
 }
 
@@ -289,21 +292,36 @@ func (p *PowerPlugin) cleanup() error {
 
 // Serve starts the gRPC server and register the device plugin to Kubelet
 func (p *PowerPlugin) Serve() error {
-	err := p.Start()
-	if err != nil {
-		klog.Errorf("Could not start device plugin: %v", err)
-		return err
-	}
-	klog.Infof("Starting to serve on %s", p.socket)
+	for {
+		// Start the device plugin server
+		err := p.Start()
+		if err != nil {
+			klog.Errorf("Could not start device plugin: %v", err)
+			return err
+		}
+		klog.Infof("Starting to serve on %s", p.socket)
 
-	err = p.Register(pluginapi.KubeletSocket, resource)
-	if err != nil {
-		klog.Errorf("Could not register device plugin: %v", err)
+		// Start monitoring socket health
+		go p.monitorSocketHealth()
+
+		// Register device plugin with kubelet
+		err = p.Register(pluginapi.KubeletSocket, resource)
+		if err != nil {
+			klog.Errorf("Could not register device plugin: %v", err)
+			p.Stop()
+			return err
+		}
+		klog.Infof("Registered device plugin with Kubelet")
+
+		// Wait for a restart signal from socket health monitor
+		<-p.restart
+		klog.Warning("Plugin restart triggered by socket health monitor")
+
+		// Stop the current plugin instance before restarting
 		p.Stop()
-		return err
+
+		// Loop will restart the plugin by continuing here
 	}
-	klog.Infof("Registered device plugin with Kubelet")
-	return nil
 }
 
 // func (p *PowerPlugin) Run() int {
@@ -408,5 +426,47 @@ func (m *PowerPlugin) GetAllocateFunc() func(r *pluginapi.AllocateRequest, devs 
 			responses.ContainerResponses = append(responses.ContainerResponses, response)
 		}
 		return &responses, nil
+	}
+}
+
+// monitoring socket health function
+func (p *PowerPlugin) monitorSocketHealth() {
+	for {
+		conn, err := grpc.NewClient(
+			unix+"://"+pluginapi.KubeletSocket,
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithContextDialer(func(ctx context.Context, addr string) (net.Conn, error) {
+				return (&net.Dialer{}).DialContext(ctx, "unix", addr)
+			}),
+		)
+		if err != nil {
+			klog.Errorf("Healthcheck: failed to create gRPC client: %v", err)
+			time.Sleep(5 * time.Second)
+			continue
+		}
+
+		state := conn.GetState()
+		klog.Infof("Healthcheck: initial gRPC state is %v", state)
+
+		for {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			stateChanged := conn.WaitForStateChange(ctx, state)
+			cancel()
+
+			if !stateChanged {
+				klog.Infof("Healthcheck: gRPC state unchanged after timeout, continuing to monitor")
+				continue
+			}
+
+			state = conn.GetState()
+			klog.Infof("Healthcheck: gRPC state changed to %s", state.String())
+
+			if state == connectivity.Shutdown || state == connectivity.TransientFailure {
+				klog.Errorf("Healthcheck: gRPC failure (%v), requesting plugin restart", state)
+				conn.Close()
+				p.restart <- struct{}{}
+				return
+			}
+		}
 	}
 }

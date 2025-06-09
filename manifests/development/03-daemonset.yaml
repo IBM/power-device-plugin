@@ -69,6 +69,7 @@ spec:
         - containerPort: 8080
           name: http
         livenessProbe:
+          periodSeconds: 5
           exec:
             command:
             - stat
