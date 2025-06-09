@@ -218,6 +218,12 @@ func (p *PowerPlugin) ListAndWatch(e *pluginapi.Empty, stream pluginapi.DevicePl
 				klog.Infof("ListAndWatch: Exit")
 				return err // Let kubelet re-initiate plugin
 			}
+
+		case <-p.restart:
+			klog.Warning("Plugin restart triggered")
+			// Stop the current plugin instance before restarting
+			p.Stop()
+			return nil
 		}
 	}
 }
