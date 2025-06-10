@@ -441,7 +441,7 @@ func (p *PowerPlugin) monitorSocketHealth() {
 		conn, err := dial()
 		if err != nil {
 			klog.Errorf("Healthcheck: failed to create gRPC client: %v", err)
-			time.Sleep(15 * time.Second)
+			time.Sleep(1 * time.Second)
 			continue
 		}
 
@@ -449,7 +449,7 @@ func (p *PowerPlugin) monitorSocketHealth() {
 		klog.Infof("Healthcheck: initial gRPC state is %v", state)
 
 		for {
-			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 			stateChanged := conn.WaitForStateChange(ctx, state)
 			cancel()
 
