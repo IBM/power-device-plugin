@@ -454,7 +454,7 @@ func (p *PowerPlugin) monitorSocketHealth() {
 			cancel()
 
 			if !stateChanged {
-				klog.Infof("Healthcheck: gRPC state unchanged after timeout, continuing to monitor")
+				klog.Infof("Healthcheck: gRPC state unchanged after timeout, continuing to monitor state %s:", conn.GetState())
 				continue
 			}
 
