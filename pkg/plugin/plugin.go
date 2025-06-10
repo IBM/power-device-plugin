@@ -438,16 +438,10 @@ func (m *PowerPlugin) GetAllocateFunc() func(r *pluginapi.AllocateRequest, devs 
 // monitoring socket health function
 func (p *PowerPlugin) monitorSocketHealth() {
 	for {
-		conn, err := grpc.NewClient(
-			unix+"://"+pluginapi.KubeletSocket,
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-			grpc.WithContextDialer(func(ctx context.Context, addr string) (net.Conn, error) {
-				return (&net.Dialer{}).DialContext(ctx, "unix", addr)
-			}),
-		)
+		conn, err := dial()
 		if err != nil {
 			klog.Errorf("Healthcheck: failed to create gRPC client: %v", err)
-			time.Sleep(5 * time.Second)
+			time.Sleep(15 * time.Second)
 			continue
 		}
 
@@ -455,7 +449,7 @@ func (p *PowerPlugin) monitorSocketHealth() {
 		klog.Infof("Healthcheck: initial gRPC state is %v", state)
 
 		for {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 			stateChanged := conn.WaitForStateChange(ctx, state)
 			cancel()
 
