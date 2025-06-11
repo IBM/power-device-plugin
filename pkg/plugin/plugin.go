@@ -438,14 +438,14 @@ func (p *PowerPlugin) monitorSocketHealth() {
 	defer ticker.Stop()
 
 	for range ticker.C {
-		_, err := os.Stat(pluginapi.KubeletSocket)
-		if err != nil {
+		// Check plugin registration socket
+		if _, err := os.Stat(p.socket); err != nil {
 			if os.IsNotExist(err) {
-				klog.Warningf("Healthcheck: Kubelet socket deleted (%s), triggering plugin restart", pluginapi.KubeletSocket)
+				klog.Warningf("Healthcheck: Plugin socket deleted (%s), triggering plugin restart", p.socket)
 				p.restart <- struct{}{}
 				return
 			}
-			klog.Errorf("Healthcheck: error checking kubelet socket: %v", err)
+			klog.Errorf("Healthcheck: error checking plugin socket: %v", err)
 		}
 	}
 }
