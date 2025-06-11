@@ -437,36 +437,18 @@ func (m *PowerPlugin) GetAllocateFunc() func(r *pluginapi.AllocateRequest, devs 
 
 // monitoring socket health function
 func (p *PowerPlugin) monitorSocketHealth() {
-	for {
-		conn, err := dial()
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		_, err := os.Stat(pluginapi.KubeletSocket)
 		if err != nil {
-			klog.Errorf("Healthcheck: failed to create gRPC client: %v", err)
-			time.Sleep(15 * time.Second)
-			continue
-		}
-
-		state := conn.GetState()
-		klog.Infof("Healthcheck: initial gRPC state is %v", state)
-
-		for {
-			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-			stateChanged := conn.WaitForStateChange(ctx, state)
-			cancel()
-
-			if !stateChanged {
-				klog.Infof("Healthcheck: gRPC state unchanged after timeout, continuing to monitor state: %s", conn.GetState())
-				continue
-			}
-
-			state = conn.GetState()
-			klog.Infof("Healthcheck: gRPC state changed to %s", state.String())
-
-			if state == connectivity.Shutdown || state == connectivity.TransientFailure {
-				klog.Errorf("Healthcheck: gRPC failure (%v), requesting plugin restart", state)
-				conn.Close()
+			if os.IsNotExist(err) {
+				klog.Warningf("Healthcheck: Kubelet socket deleted (%s), triggering plugin restart", pluginapi.KubeletSocket)
 				p.restart <- struct{}{}
 				return
 			}
+			klog.Errorf("Healthcheck: error checking kubelet socket: %v", err)
 		}
 	}
 }
