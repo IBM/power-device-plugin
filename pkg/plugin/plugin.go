@@ -312,13 +312,6 @@ func (p *PowerPlugin) Serve() error {
 
 		// Monitor health in background
 		go p.monitorSocketHealth()
-
-		// Wait until restart is triggered
-		<-p.restart
-		klog.Warning("Plugin restart triggered by socket health monitor")
-
-		// Stop and restart loop
-		p.Stop()
 	}
 }
 
