@@ -290,18 +290,16 @@ func (p *PowerPlugin) Serve() error {
 	for {
 		// Start gRPC server
 		if err := p.Start(); err != nil {
-			klog.Errorf("Start failed: %v", err)
-			time.Sleep(5 * time.Second)
-			continue
+			klog.Errorf("Could not start device plugin: %v", err)
+			return err
 		}
 		klog.Infof("Starting to serve on %s", p.socket)
 
 		// Register with Kubelet
 		if err := p.Register(pluginapi.KubeletSocket, resource); err != nil {
-			klog.Errorf("Register failed: %v", err)
+			klog.Errorf("Could not register device plugin: %v", err)
 			p.Stop()
-			time.Sleep(5 * time.Second)
-			continue
+			return err
 		}
 		klog.Infof("Registered device plugin with Kubelet")
 
