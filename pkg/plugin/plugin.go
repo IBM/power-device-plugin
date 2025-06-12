@@ -213,11 +213,6 @@ func (p *PowerPlugin) ListAndWatch(e *pluginapi.Empty, stream pluginapi.DevicePl
 				klog.Errorf("Failed to send updated device health to kubelet: %v", err)
 				return err
 			}
-
-		case <-p.restart:
-			klog.Warning("Plugin restart triggered by socket health monitor")
-			p.Stop()
-			return nil
 		}
 	}
 }
@@ -311,7 +306,14 @@ func (p *PowerPlugin) Serve() error {
 		klog.Infof("Registered device plugin with Kubelet")
 
 		// Monitor health in background
-		go p.monitorSocketHealth()
+		go p.monitorSocketHealth()		
+		
+		// Wait for restart signal from health monitor
+		<-p.restart
+		klog.Warning("Serve(): plugin restart triggered by socket health monitor")
+
+		// Stop server before restarting
+		p.Stop()
 	}
 }
 
