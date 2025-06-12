@@ -68,7 +68,7 @@ func New() (*PowerPlugin, error) {
 		socket:  socket,
 		stop:    make(chan interface{}),
 		health:  make(chan *pluginapi.Device),
-		restart: make(chan struct{}),
+		restart: make(chan struct{}, 1),
 	}, nil
 }
 
@@ -213,6 +213,11 @@ func (p *PowerPlugin) ListAndWatch(e *pluginapi.Empty, stream pluginapi.DevicePl
 				klog.Errorf("Failed to send updated device health to kubelet: %v", err)
 				return err
 			}
+
+		case <-p.restart:
+			klog.Warning("Plugin restart triggered by socket health monitor")
+			p.Stop()
+			return nil
 		}
 	}
 }
@@ -289,19 +294,19 @@ func (p *PowerPlugin) cleanup() error {
 func (p *PowerPlugin) Serve() error {
 	for {
 		// Start gRPC server
-		err := p.Start()
-		if err != nil {
-			klog.Errorf("Could not start device plugin: %v", err)
-			return err
+		if err := p.Start(); err != nil {
+			klog.Errorf("Start failed: %v", err)
+			time.Sleep(5 * time.Second)
+			continue
 		}
 		klog.Infof("Starting to serve on %s", p.socket)
 
 		// Register with Kubelet
-		err = p.Register(pluginapi.KubeletSocket, resource)
-		if err != nil {
-			klog.Errorf("Could not register device plugin: %v", err)
+		if err := p.Register(pluginapi.KubeletSocket, resource); err != nil {
+			klog.Errorf("Register failed: %v", err)
 			p.Stop()
-			return err
+			time.Sleep(5 * time.Second)
+			continue
 		}
 		klog.Infof("Registered device plugin with Kubelet")
 
