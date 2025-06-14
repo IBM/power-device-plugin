@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"sync"
 	"syscall"
 	"time"
 
@@ -50,9 +51,10 @@ type PowerPlugin struct {
 	devs   []string
 	socket string
 
-	stop    chan interface{}
-	health  chan *pluginapi.Device
-	restart chan struct{}
+	stop     chan interface{}
+	health   chan *pluginapi.Device
+	restart  chan struct{}
+	stopOnce sync.Once
 
 	server *grpc.Server
 
@@ -147,7 +149,10 @@ func (p *PowerPlugin) Stop() error {
 	}
 	p.server.Stop()
 	p.server = nil
-	close(p.stop)
+
+	p.stopOnce.Do(func() {
+		close(p.stop)
+	})
 
 	return p.cleanup()
 }
@@ -304,8 +309,8 @@ func (p *PowerPlugin) Serve() error {
 		klog.Infof("Registered device plugin with Kubelet")
 
 		// Monitor health in background
-		go p.monitorSocketHealth()		
-		
+		go p.monitorSocketHealth()
+
 		// Wait for restart signal from health monitor
 		<-p.restart
 		klog.Warning("Serve(): plugin restart triggered by socket health monitor")
