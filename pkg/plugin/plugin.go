@@ -149,10 +149,7 @@ func (p *PowerPlugin) Stop() error {
 	}
 	p.server.Stop()
 	p.server = nil
-
-	p.stopOnce.Do(func() {
-		close(p.stop)
-	})
+	close(p.stop)
 
 	return p.cleanup()
 }
@@ -185,6 +182,8 @@ func (p *PowerPlugin) Register(kubeletEndpoint, resourceName string) error {
 func (p *PowerPlugin) ListAndWatch(e *pluginapi.Empty, stream pluginapi.DevicePlugin_ListAndWatchServer) error {
 	klog.Infof("Listing devices: %v", p.devs)
 
+	go p.monitorSocketHealth()
+
 	// Initial scan if devices list is empty
 	if len(p.devs) == 0 {
 		devices, err := ScanRootForDevices()
@@ -206,6 +205,11 @@ func (p *PowerPlugin) ListAndWatch(e *pluginapi.Empty, stream pluginapi.DevicePl
 		select {
 		case <-p.stop:
 			klog.Infoln("Told to Stop...")
+			return nil
+
+		case <-p.restart:
+			klog.Infoln("Told to restart...")
+			p.Stop()
 			return nil
 
 		case d := <-p.health:
@@ -291,33 +295,24 @@ func (p *PowerPlugin) cleanup() error {
 }
 
 // Serve starts the gRPC server and register the device plugin to Kubelet
+
+// Serve starts the gRPC server and register the device plugin to Kubelet
 func (p *PowerPlugin) Serve() error {
-	for {
-		// Start gRPC server
-		if err := p.Start(); err != nil {
-			klog.Errorf("Could not start device plugin: %v", err)
-			return err
-		}
-		klog.Infof("Starting to serve on %s", p.socket)
-
-		// Register with Kubelet
-		if err := p.Register(pluginapi.KubeletSocket, resource); err != nil {
-			klog.Errorf("Could not register device plugin: %v", err)
-			p.Stop()
-			return err
-		}
-		klog.Infof("Registered device plugin with Kubelet")
-
-		// Monitor health in background
-		go p.monitorSocketHealth()
-
-		// Wait for restart signal from health monitor
-		<-p.restart
-		klog.Warning("Serve(): plugin restart triggered by socket health monitor")
-
-		// Stop server before restarting
-		p.Stop()
+	err := p.Start()
+	if err != nil {
+		klog.Errorf("Could not start device plugin: %v", err)
+		return err
 	}
+	klog.Infof("Starting to serve on %s", p.socket)
+
+	err = p.Register(pluginapi.KubeletSocket, resource)
+	if err != nil {
+		klog.Errorf("Could not register device plugin: %v", err)
+		p.Stop()
+		return err
+	}
+	klog.Infof("Registered device plugin with Kubelet")
+	return nil
 }
 
 // func (p *PowerPlugin) Run() int {
