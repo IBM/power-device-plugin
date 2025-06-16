@@ -1,0 +1,128 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: power-device-plugin
+  namespace: power-device-plugin
+  labels:
+    app: power-device-plugin
+spec:
+  selector:
+    matchLabels:
+      app: power-device-plugin
+  template:
+    metadata:
+      annotations:
+        openshift.io/required-scc: privileged
+        openshift.io/scc: privileged
+      labels:
+        app: power-device-plugin
+    spec:
+      tolerations:
+      - key: node.kubernetes.io/out-of-service
+        operator: Exists
+        effect: NoExecute
+      # Dev: we're only installing on workers.
+      # - key: node-role.kubernetes.io/control-plane
+      #   operator: Exists
+      #   effect: NoSchedule
+      # - key: node-role.kubernetes.io/master
+      #   operator: Exists
+      #   effect: NoSchedule
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/arch
+                operator: In
+                values:
+                - amd64
+                - ppc64le
+                - s390x
+      containers:
+      - name: plugin
+        image: quay.io/powercloud/power-dev-plugin:development
+        imagePullPolicy: Always
+        command: [ "/opt/power-dev-plugin/bin/power-dev-plugin" ]
+        env:
+        - name: GOMEMLIMIT
+          valueFrom:
+            resourceFieldRef:
+              resource: limits.memory
+        - name: GOMAXPROCS
+          valueFrom:
+            resourceFieldRef:
+              resource: limits.cpu
+        # Once this goes into production, we can turn the logging off
+        - name: GRPC_GO_LOG_VERBOSITY_LEVEL
+          value: "99"
+        - name: GRPC_GO_LOG_SEVERITY_LEVEL
+          value: "info"
+        resources:
+          limits:
+            cpu: 500m
+            memory: 100Mi
+          requests:
+            cpu: 100m
+            memory: 100Mi
+        ports:
+        - containerPort: 8080
+          name: http
+        livenessProbe:
+          periodSeconds: 5
+          exec:
+            command:
+            - stat
+            - /var/lib/kubelet/device-plugins/power-dev.csi.ibm.com-reg.sock
+          initialDelaySeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - stat
+            - /var/lib/kubelet/device-plugins/power-dev.csi.ibm.com-reg.sock
+          initialDelaySeconds: 5
+          failureThreshold: 10
+        volumeMounts:
+        - name: host-sys
+          mountPath: /host/sys
+        - name: dev-plugins-reg
+          mountPath: /registration
+        - name: dev-plugins
+          mountPath: /var/lib/kubelet/device-plugins
+        serviceAccount: power-device-plugin
+        serviceAccountName: power-device-plugin
+        securityContext:
+          privileged: true
+          capabilities:
+            add:
+              - CAP_SYS_ADMIN
+              - CAP_FOWNER
+              - NET_ADMIN
+              - SYS_ADMIN
+            drop:
+              - ALL
+          runAsUser: 0
+          runAsNonRoot: false
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: true
+      volumes:
+       - name: host-sys
+         hostPath:
+           path: /sys
+           type: Directory
+       - name: dev-plugins-reg
+         hostPath:
+           path: /var/lib/kubelet/plugins_registry
+           type: Directory
+       - name: dev-plugins
+         hostPath:
+           path: /var/lib/kubelet/device-plugins
+           type: Directory
+      priorityClassName: system-node-critical
+      hostPID: true
+      hostIPC: true
+      hostNetwork: true
+      serviceAccount: power-device-plugin
+      serviceAccountName: power-device-plugin
+  updateStrategy:
+    type: RollingUpdate
