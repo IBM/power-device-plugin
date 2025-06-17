@@ -105,7 +105,7 @@ func dial() (*grpc.ClientConn, error) {
 
 // Start starts the gRPC server of the device plugin
 func (p *PowerPlugin) Start() error {
-	config, err := loadDevicePluginConfig(configPath)
+	config, err := loadDevicePluginConfig()
 	if err != nil {
 		klog.Warningf("Failed to load config file: %v. Proceeding without nx-gzip.", err)
 	}
@@ -458,7 +458,7 @@ func (p *PowerPlugin) monitorSocketHealth() {
 }
 
 // Read config map file
-func loadDevicePluginConfig(configPath string) (*api.DevicePluginConfig, error) {
+func loadDevicePluginConfig() (*api.DevicePluginConfig, error) {
 	data, err := os.ReadFile(filepath.Clean(configPath))
 	if err != nil {
 		return nil, err

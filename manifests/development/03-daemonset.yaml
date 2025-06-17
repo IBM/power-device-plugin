@@ -89,6 +89,10 @@ spec:
           mountPath: /registration
         - name: dev-plugins
           mountPath: /var/lib/kubelet/device-plugins
+        - name: plugin-config
+          mountPath: /etc/power-device-plugin/config.json
+          subPath: config.json
+          readOnly: true
         serviceAccount: power-device-plugin
         serviceAccountName: power-device-plugin
         securityContext:
@@ -118,6 +122,12 @@ spec:
          hostPath:
            path: /var/lib/kubelet/device-plugins
            type: Directory
+       - name: plugin-config
+         configMap:
+           name: power-device-config
+           items:
+           - key: config.json
+             path: config.json
       priorityClassName: system-node-critical
       hostPID: true
       hostIPC: true
