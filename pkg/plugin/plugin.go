@@ -65,6 +65,8 @@ type PowerPlugin struct {
 
 	nxGzip bool
 
+	nxGzip bool
+
 	pluginapi.DevicePluginServer
 }
 
