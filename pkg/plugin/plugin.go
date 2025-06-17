@@ -459,15 +459,22 @@ func (p *PowerPlugin) monitorSocketHealth() {
 
 // Read config map file
 func loadDevicePluginConfig() (*api.DevicePluginConfig, error) {
+	klog.Infof("Attempting to read config file from: %s", configPath)
+
 	data, err := os.ReadFile(filepath.Clean(configPath))
 	if err != nil {
+		klog.Warningf("Unable to read config file: %v", err)
 		return nil, err
 	}
+
+	klog.Infof("Raw config data: %s", string(data))
 
 	var config api.DevicePluginConfig
 	if err := json.Unmarshal(data, &config); err != nil {
+		klog.Errorf("Failed to unmarshal config file: %v", err)
 		return nil, err
 	}
 
+	klog.Infof("Config loaded successfully: %+v", config)
 	return &config, nil
 }
