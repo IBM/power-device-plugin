@@ -18,16 +18,19 @@ package plugin
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"syscall"
 	"time"
 
 	"github.com/jaypipes/ghw"
+	"github.com/ocp-power-demos/power-dev-plugin/api"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"k8s.io/klog"
@@ -42,6 +45,8 @@ const (
 	preStartContainerFlag      = false
 	getPreferredAllocationFlag = false
 	unix                       = "unix"
+	configPath                 = "/etc/power-device-plugin/config.json"
+	nxGzipDevicePath           = "crypto/nx-gzip"
 )
 
 // DevicePluginServer is a mandatory interface that must be implemented by all plugins.
@@ -57,6 +62,8 @@ type PowerPlugin struct {
 	stopOnce sync.Once
 
 	server *grpc.Server
+
+	nxGzip bool
 
 	pluginapi.DevicePluginServer
 }
@@ -98,7 +105,15 @@ func dial() (*grpc.ClientConn, error) {
 
 // Start starts the gRPC server of the device plugin
 func (p *PowerPlugin) Start() error {
-	devices, err := ScanRootForDevices()
+	config, err := loadDevicePluginConfig(configPath)
+	if err != nil {
+		klog.Warningf("Failed to load config file: %v. Proceeding without nx-gzip.", err)
+	}
+
+	p.nxGzip = config != nil && config.NxGzip
+	klog.Infof("nxGzip enabled: %v", p.nxGzip)
+
+	devices, err := ScanRootForDevices(p.nxGzip)
 	if err != nil {
 		klog.Errorf("Scan root for devices was unsuccessful during ListAndWatch: %v", err)
 		return err
@@ -186,7 +201,7 @@ func (p *PowerPlugin) ListAndWatch(e *pluginapi.Empty, stream pluginapi.DevicePl
 
 	// Initial scan if devices list is empty
 	if len(p.devs) == 0 {
-		devices, err := ScanRootForDevices()
+		devices, err := ScanRootForDevices(p.nxGzip)
 		if err != nil {
 			klog.Errorf("Scan root for devices was unsuccessful during ListAndWatch: %v", err)
 			return err
@@ -230,7 +245,7 @@ func (p *PowerPlugin) ListAndWatch(e *pluginapi.Empty, stream pluginapi.DevicePl
 func (p *PowerPlugin) Allocate(ctx context.Context, reqs *pluginapi.AllocateRequest) (*pluginapi.AllocateResponse, error) {
 	klog.Infof("Allocate request: %v", reqs)
 
-	devices, err := ScanRootForDevices()
+	devices, err := ScanRootForDevices(p.nxGzip)
 	if err != nil {
 		klog.Errorf("Scan root for devices was unsuccessful: %v", err)
 		return nil, err
@@ -361,7 +376,7 @@ func AppShutdown() error {
 }
 
 // scans the local disk using ghw to find the blockdevices
-func ScanRootForDevices() ([]string, error) {
+func ScanRootForDevices(nxGzipEnabled bool) ([]string, error) {
 	// relies on GHW_CHROOT=/host/dev
 	// lsblk -f --json --paths -s | jq -r '.blockdevices[] | select(.fstype != "xfs")' | grep mpath | grep -v fstype | sort -u | wc -l
 	// This may be the best way to get the devices.
@@ -380,12 +395,16 @@ func ScanRootForDevices() ([]string, error) {
 		}
 		devices = append(devices, disk.Name)
 	}
+	if nxGzipEnabled {
+		devices = append(devices, nxGzipDevicePath)
+		klog.Infof("nx-gzip enabled: appended /dev/crypto/nx-gzip to devices")
+	}
 	return devices, nil
 }
 
 func (m *PowerPlugin) GetAllocateFunc() func(r *pluginapi.AllocateRequest, devs map[string]pluginapi.Device) (*pluginapi.AllocateResponse, error) {
 	return func(r *pluginapi.AllocateRequest, devs map[string]pluginapi.Device) (*pluginapi.AllocateResponse, error) {
-		devices, err := ScanRootForDevices()
+		devices, err := ScanRootForDevices(m.nxGzip)
 		if err != nil {
 			klog.Errorf("Scan root for devices was unsuccessful: %v", err)
 			return nil, err
@@ -436,4 +455,19 @@ func (p *PowerPlugin) monitorSocketHealth() {
 			}
 		}
 	}
+}
+
+// Read config map file
+func loadDevicePluginConfig(configPath string) (*api.DevicePluginConfig, error) {
+	data, err := os.ReadFile(filepath.Clean(configPath))
+	if err != nil {
+		return nil, err
+	}
+
+	var config api.DevicePluginConfig
+	if err := json.Unmarshal(data, &config); err != nil {
+		return nil, err
+	}
+
+	return &config, nil
 }
