@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: power-device-plugin-config
+  namespace: power-device-plugin
+data:
+  config.json: |
+    {
+      "nx-gzip": true
+    }
