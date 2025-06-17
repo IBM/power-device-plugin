@@ -92,6 +92,10 @@ spec:
         - name: plugin-config
           mountPath: /etc/power-device-plugin
           readOnly: true
+        - name: plugin-config
+          mountPath: /etc/power-device-plugin/config.json
+          subPath: config.json
+          readOnly: true
         serviceAccount: power-device-plugin
         serviceAccountName: power-device-plugin
         securityContext:
