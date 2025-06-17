@@ -25,6 +25,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"syscall"
 	"time"
 
@@ -55,8 +56,10 @@ type PowerPlugin struct {
 	devs   []string
 	socket string
 
-	stop   chan interface{}
-	health chan *pluginapi.Device
+	stop     chan interface{}
+	health   chan *pluginapi.Device
+	restart  chan struct{}
+	stopOnce sync.Once
 
 	server *grpc.Server
 
@@ -70,10 +73,11 @@ func New() (*PowerPlugin, error) {
 	// Empty array to start.
 	var devs []string = []string{}
 	return &PowerPlugin{
-		devs:   devs,
-		socket: socket,
-		stop:   make(chan interface{}),
-		health: make(chan *pluginapi.Device),
+		devs:    devs,
+		socket:  socket,
+		stop:    make(chan interface{}),
+		health:  make(chan *pluginapi.Device),
+		restart: make(chan struct{}, 1),
 	}, nil
 }
 
@@ -193,32 +197,46 @@ func (p *PowerPlugin) Register(kubeletEndpoint, resourceName string) error {
 func (p *PowerPlugin) ListAndWatch(e *pluginapi.Empty, stream pluginapi.DevicePlugin_ListAndWatchServer) error {
 	klog.Infof("Listing devices: %v", p.devs)
 
+	go p.monitorSocketHealth()
+
+	// Initial scan if devices list is empty
 	if len(p.devs) == 0 {
 		devices, err := ScanRootForDevices(p.nxGzip)
 		if err != nil {
 			klog.Errorf("Scan root for devices was unsuccessful during ListAndWatch: %v", err)
 			return err
 		}
-
 		p.devs = devices
 		klog.Infof("Updating the devices to %d total devices", len(p.devs))
 	}
 
-	pluginDevices := convertDeviceToPluginDevices(p.devs)
-	klog.Infof("PluginDevices are: %s", pluginDevices)
-
-	stream.Send(&pluginapi.ListAndWatchResponse{Devices: pluginDevices})
+	// Always send device list at the beginning
+	if err := stream.Send(&pluginapi.ListAndWatchResponse{Devices: convertDeviceToPluginDevices(p.devs)}); err != nil {
+		klog.Errorf("Failed to send initial device list: %v", err)
+		return err
+	}
 
 	for {
 		select {
 		case <-p.stop:
 			klog.Infoln("Told to Stop...")
 			return nil
+
+		case <-p.restart:
+			klog.Infoln("Told to restart...")
+			p.Stop()
+			return nil
+
 		case d := <-p.health:
 			//ignoring unhealthy state.
 			klog.Infoln("Checking the health")
+			klog.Infof("Device health update received for %s", d.ID)
 			d.Health = pluginapi.Healthy
-			stream.Send(&pluginapi.ListAndWatchResponse{Devices: convertDeviceToPluginDevices(p.devs)})
+
+			if err := stream.Send(&pluginapi.ListAndWatchResponse{Devices: convertDeviceToPluginDevices(p.devs)}); err != nil {
+				klog.Errorf("Failed to send updated device health to kubelet: %v", err)
+				return err
+			}
 		}
 	}
 }
@@ -290,6 +308,8 @@ func (p *PowerPlugin) cleanup() error {
 	}
 	return nil
 }
+
+// Serve starts the gRPC server and register the device plugin to Kubelet
 
 // Serve starts the gRPC server and register the device plugin to Kubelet
 func (p *PowerPlugin) Serve() error {
@@ -416,6 +436,24 @@ func (m *PowerPlugin) GetAllocateFunc() func(r *pluginapi.AllocateRequest, devs 
 			responses.ContainerResponses = append(responses.ContainerResponses, response)
 		}
 		return &responses, nil
+	}
+}
+
+// monitoring socket health function
+func (p *PowerPlugin) monitorSocketHealth() {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		for _, path := range []string{pluginapi.KubeletSocket, p.socket} {
+			if _, err := os.Stat(path); os.IsNotExist(err) {
+				klog.Warningf("Healthcheck: socket deleted (%s), triggering plugin restart", path)
+				p.restart <- struct{}{}
+				return
+			} else if err != nil {
+				klog.Errorf("Healthcheck: error checking %s: %v", path, err)
+			}
+		}
 	}
 }
 
