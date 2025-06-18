@@ -90,7 +90,7 @@ spec:
         - name: dev-plugins
           mountPath: /var/lib/kubelet/device-plugins
         - name: plugin-config
-          mountPath: /etc/power-device-plugin/config.json
+          mountPath: /etc/power-device-plugin
           subPath: config.json
           readOnly: true
         serviceAccount: power-device-plugin
