@@ -481,8 +481,12 @@ func loadDevicePluginConfig() (*api.DevicePluginConfig, error) {
 
 	data, err := os.ReadFile(filepath.Clean(configPath))
 	if err != nil {
+		if os.IsNotExist(err) {
+			klog.Warningf("Config file not found at %s. Proceeding with default configuration.", configPath)
+			return &api.DevicePluginConfig{}, nil // Return default config with nxGzip = false
+		}
 		klog.Warningf("Unable to read config file: %v", err)
-		return nil, err
+		return nil, err // Return other read errors (e.g., permission denied)
 	}
 
 	klog.Infof("Raw config data: %s", string(data))
