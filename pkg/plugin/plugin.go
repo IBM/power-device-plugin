@@ -523,6 +523,6 @@ func loadDevicePluginConfig() (*api.DevicePluginConfig, error) {
 		return nil, err
 	}
 
-	klog.Infof("Config loaded successfully: %+v", config)
+	klog.Infof("Config loaded successfully")
 	return &config, nil
 }
