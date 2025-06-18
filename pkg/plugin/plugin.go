@@ -479,14 +479,40 @@ func loadDevicePluginConfig() (*api.DevicePluginConfig, error) {
 		return &api.DevicePluginConfig{}, nil
 	}
 
-	data, err := os.ReadFile(filepath.Clean(configPath))
+	info, err := os.Stat(filepath.Clean(configPath))
 	if err != nil {
 		if os.IsNotExist(err) {
 			klog.Warningf("Config file not found at %s. Proceeding with default configuration.", configPath)
-			return &api.DevicePluginConfig{}, nil // Return default config with nxGzip = false
+			return &api.DevicePluginConfig{}, nil
 		}
+		klog.Warningf("Unable to stat config file: %v", err)
+		return nil, err
+	}
+
+	if info.IsDir() {
+		klog.Warningf("Config path %s is a directory, not a file. Proceeding with default configuration.", configPath)
+		return &api.DevicePluginConfig{}, nil
+	}
+
+	info, err := os.Stat(filepath.Clean(configPath))
+	if err != nil {
+		if os.IsNotExist(err) {
+			klog.Warningf("Config file not found at %s. Proceeding with default configuration.", configPath)
+			return &api.DevicePluginConfig{}, nil
+		}
+		klog.Warningf("Unable to stat config file: %v", err)
+		return nil, err
+	}
+
+	if info.IsDir() {
+		klog.Warningf("Config path %s is a directory, not a file. Proceeding with default configuration.", configPath)
+		return &api.DevicePluginConfig{}, nil
+	}
+
+	data, err := os.ReadFile(filepath.Clean(configPath))
+	if err != nil {
 		klog.Warningf("Unable to read config file: %v", err)
-		return nil, err // Return other read errors (e.g., permission denied)
+		return nil, err
 	}
 
 	klog.Infof("Raw config data: %s", string(data))
