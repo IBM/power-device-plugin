@@ -65,8 +65,6 @@ type PowerPlugin struct {
 
 	nxGzip bool
 
-	nxGzip bool
-
 	pluginapi.DevicePluginServer
 }
 
@@ -107,7 +105,6 @@ func dial() (*grpc.ClientConn, error) {
 
 // Start starts the gRPC server of the device plugin
 func (p *PowerPlugin) Start() error {
-	config, err := loadDevicePluginConfig()
 	config, err := loadDevicePluginConfig()
 	if err != nil {
 		klog.Warningf("Failed to load config file: %v. Proceeding without nx-gzip.", err)
@@ -463,36 +460,6 @@ func (p *PowerPlugin) monitorSocketHealth() {
 // Read config map file
 func loadDevicePluginConfig() (*api.DevicePluginConfig, error) {
 	klog.Infof("Attempting to read config file from: %s", configPath)
-
-	info, err := os.Stat(filepath.Clean(configPath))
-	if err != nil {
-		if os.IsNotExist(err) {
-			klog.Warningf("Config file not found at %s. Proceeding with default configuration.", configPath)
-			return &api.DevicePluginConfig{}, nil
-		}
-		klog.Warningf("Unable to stat config file: %v", err)
-		return nil, err
-	}
-
-	if info.IsDir() {
-		klog.Warningf("Config path %s is a directory, not a file. Proceeding with default configuration.", configPath)
-		return &api.DevicePluginConfig{}, nil
-	}
-
-	info, err := os.Stat(filepath.Clean(configPath))
-	if err != nil {
-		if os.IsNotExist(err) {
-			klog.Warningf("Config file not found at %s. Proceeding with default configuration.", configPath)
-			return &api.DevicePluginConfig{}, nil
-		}
-		klog.Warningf("Unable to stat config file: %v", err)
-		return nil, err
-	}
-
-	if info.IsDir() {
-		klog.Warningf("Config path %s is a directory, not a file. Proceeding with default configuration.", configPath)
-		return &api.DevicePluginConfig{}, nil
-	}
 
 	info, err := os.Stat(filepath.Clean(configPath))
 	if err != nil {
