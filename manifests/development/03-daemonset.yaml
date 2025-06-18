@@ -125,6 +125,7 @@ spec:
        - name: plugin-config
          configMap:
            name: power-device-config
+           optional: true 
            items:
            - key: config.json
              path: config.json
