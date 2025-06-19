@@ -19,4 +19,5 @@ package api
 // DevicePluginConfig holds the configuration parsed from the ConfigMap
 type DevicePluginConfig struct {
 	NxGzip bool `json:"nx-gzip"`
+	Permissions string `json:"permissions"` // Accepts: R, RW, RWM, RM, W, WM, M
 }

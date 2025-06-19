@@ -25,6 +25,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -259,6 +260,11 @@ func (p *PowerPlugin) Allocate(ctx context.Context, reqs *pluginapi.AllocateRequ
 			Devices: ds,
 		}
 
+		config, err := loadDevicePluginConfig()
+		if err != nil {
+			klog.Warningf("Failed to load config: %v")
+		}
+
 		// Originally req.DeviceIds
 		for i := range devices {
 			ds[i] = &pluginapi.DeviceSpec{
@@ -270,7 +276,7 @@ func (p *PowerPlugin) Allocate(ctx context.Context, reqs *pluginapi.AllocateRequ
 				// * w - allows container to write to the specified device.
 				// * m - allows container to create device files that do not yet exist.
 				// We don't need `m`
-				Permissions: "rw",
+				Permissions: getValidatedPermission(config),
 			}
 		}
 		responses.ContainerResponses = append(responses.ContainerResponses, &response)
@@ -410,6 +416,8 @@ func (m *PowerPlugin) GetAllocateFunc() func(r *pluginapi.AllocateRequest, devs 
 			return nil, err
 		}
 
+		config, err := loadDevicePluginConfig()
+
 		var responses pluginapi.AllocateResponse
 		for _, req := range r.ContainerRequests {
 
@@ -429,7 +437,7 @@ func (m *PowerPlugin) GetAllocateFunc() func(r *pluginapi.AllocateRequest, devs 
 					// * w - allows container to write to the specified device.
 					// * m - allows container to create device files that do not yet exist.
 					// We don't need `m`
-					Permissions: "rw",
+					Permissions: getValidatedPermission(config),
 				})
 			}
 
@@ -492,4 +500,22 @@ func loadDevicePluginConfig() (*api.DevicePluginConfig, error) {
 
 	klog.Infof("Config loaded successfully")
 	return &config, nil
+}
+
+func getValidatedPermission(config *api.DevicePluginConfig) string {
+	if config == nil {
+		return "rwm"
+	}
+	perm := strings.ToLower(config.Permissions)
+	valid := map[string]bool{
+		"r": true, "w": true, "m": true,
+		"rw": true, "rm": true, "wm": true, "rwm": true,
+	}
+	if valid[perm] {
+		return perm
+	}
+	if perm != "" {
+		klog.Warningf("Invalid device permission '%s' in config, using default 'rwm'", perm)
+	}
+	return "rwm"
 }
