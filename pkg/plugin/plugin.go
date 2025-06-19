@@ -520,7 +520,7 @@ func getValidatedPermission(config *api.DevicePluginConfig) string {
 	if perm != "" {
 		klog.Warningf("Invalid device permission '%s' in config, using default 'rwm'", perm)
 	} else {
-		klog.Infof("No permission set in config, using default 'rwm'")
+		klog.Infof("No permission set in config, using default 'rw'")
 	}
-	return "rwm"
+	return "rw"
 }
