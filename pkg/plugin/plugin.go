@@ -490,8 +490,6 @@ func loadDevicePluginConfig() (*api.DevicePluginConfig, error) {
 		return nil, err
 	}
 
-	klog.Infof("Raw config data: %s", string(data))
-
 	var config api.DevicePluginConfig
 	if err := json.Unmarshal(data, &config); err != nil {
 		klog.Errorf("Failed to unmarshal config file: %v", err)
@@ -504,18 +502,25 @@ func loadDevicePluginConfig() (*api.DevicePluginConfig, error) {
 
 func getValidatedPermission(config *api.DevicePluginConfig) string {
 	if config == nil {
+		klog.Infof("No config provided, using default device permission: 'rwm'")
 		return "rwm"
 	}
+
 	perm := strings.ToLower(config.Permissions)
 	valid := map[string]bool{
 		"r": true, "w": true, "m": true,
 		"rw": true, "rm": true, "wm": true, "rwm": true,
 	}
+
 	if valid[perm] {
+		klog.Infof("Using validated device permission: '%s'", perm)
 		return perm
 	}
+
 	if perm != "" {
 		klog.Warningf("Invalid device permission '%s' in config, using default 'rwm'", perm)
+	} else {
+		klog.Infof("No permission set in config, using default 'rwm'")
 	}
 	return "rwm"
 }
