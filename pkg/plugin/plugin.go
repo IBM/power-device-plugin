@@ -406,6 +406,10 @@ func ScanRootForDevices(nxGzipEnabled bool) ([]string, error) {
 		devices = append(devices, nxGzipDevicePath)
 		klog.Infof("nx-gzip enabled: appended /dev/crypto/nx-gzip to devices")
 	}
+	if nxGzipEnabled {
+		devices = append(devices, nxGzipDevicePath)
+		klog.Infof("nx-gzip enabled: appended /dev/crypto/nx-gzip to devices")
+	}
 	return devices, nil
 }
 
