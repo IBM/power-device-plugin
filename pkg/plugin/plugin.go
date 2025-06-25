@@ -419,7 +419,7 @@ func (m *PowerPlugin) GetAllocateFunc() func(r *pluginapi.AllocateRequest, devs 
 
 		config, err := loadDevicePluginConfig()
 		if err != nil {
-			klog.Warningf("Failed to load config: %v")
+			klog.Warningf("Failed to load config: %v, err")
 		}
 
 		var responses pluginapi.AllocateResponse
@@ -447,6 +447,8 @@ func (m *PowerPlugin) GetAllocateFunc() func(r *pluginapi.AllocateRequest, devs 
 
 			responses.ContainerResponses = append(responses.ContainerResponses, response)
 		}
+
+		klog.Infof("Get Allocate response: %v", responses)
 		return &responses, nil
 	}
 }
@@ -494,8 +496,6 @@ func loadDevicePluginConfig() (*api.DevicePluginConfig, error) {
 		return nil, err
 	}
 
-	klog.Infof("Raw config data: %s", string(data))
-
 	var config api.DevicePluginConfig
 	if err := json.Unmarshal(data, &config); err != nil {
 		klog.Errorf("Failed to unmarshal config file: %v", err)
@@ -524,7 +524,7 @@ func getValidatedPermission(config *api.DevicePluginConfig) string {
 	}
 
 	if perm != "" {
-		klog.Warningf("Invalid device permission '%s' in config, using default 'rwm'", perm)
+		klog.Warningf("Invalid device permission '%s' in config, using default 'rw'", perm)
 	} else {
 		klog.Infof("No permission set in config, using default 'rw'")
 	}
