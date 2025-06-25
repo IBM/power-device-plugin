@@ -7,5 +7,7 @@ data:
   config.json: |
     {
       "nx-gzip": true,
-      "permissions": "rw"
+      "permissions": "rw",
+      "include-devices": ["/dev/dm-*", "/dev/crypto/nx-gzip"],
+      "exclude-devices": ["/dev/dm-3"]
     }
