@@ -6,5 +6,6 @@ metadata:
 data:
   config.json: |
     {
-      "nx-gzip": true
+      "nx-gzip": true,
+      "permissions": "rw"
     }
