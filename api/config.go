@@ -18,6 +18,8 @@ package api
 
 // DevicePluginConfig holds the configuration parsed from the ConfigMap
 type DevicePluginConfig struct {
-	NxGzip bool `json:"nx-gzip"`
-	Permissions string `json:"permissions"` // Accepts: R, RW, RWM, RM, W, WM, M
+	NxGzip         bool     `json:"nx-gzip"`
+	Permissions    string   `json:"permissions"`               // Accepts: R, RW, RWM, RM, W, WM, M
+	IncludeDevices []string `json:"include-devices,omitempty"` // e.g., "/dev/dm-0", "/dev/dm-*"
+	ExcludeDevices []string `json:"exclude-devices,omitempty"` // e.g., "/dev/dm-3", "/dev/dm-*"
 }
