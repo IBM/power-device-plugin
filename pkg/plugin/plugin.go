@@ -429,9 +429,24 @@ func ScanRootForDevices(nxGzipEnabled bool) ([]string, error) {
 	finalDevices := []string{}
 
 	// Only include devices that match the include patterns and exist on the host.
-	if len(config.IncludeDevices) > 0 {
+	useInclude := false
+	for _, item := range config.IncludeDevices {
+		if strings.TrimSpace(item) != "" {
+			useInclude = true
+			break
+		}
+
+		if item == "" {
+			klog.Warningf("Include-devices contains an empty string. Ignoring include-devices and proceeding with default behavior.")
+		}
+	}
+
+	if useInclude {
 		klog.Infof("Include-devices specified, overriding with: %v", config.IncludeDevices)
 		for _, pattern := range config.IncludeDevices {
+			if strings.TrimSpace(pattern) == "" {
+				continue
+			}
 			matches, err := filepath.Glob(pattern)
 			if err != nil {
 				klog.Warningf("Invalid include pattern: %s, skipping. Error: %v", pattern, err)
