@@ -383,6 +383,9 @@ func AppShutdown() error {
 
 // scans the local disk using ghw to find the blockdevices
 func ScanRootForDevices(nxGzipEnabled bool) ([]string, error) {
+	// relies on GHW_CHROOT=/host/dev
+	// lsblk -f --json --paths -s | jq -r '.blockdevices[] | select(.fstype != "xfs")' | grep mpath | grep -v fstype | sort -u | wc -l
+	// This may be the best way to get the devices.
 	config, err := loadDevicePluginConfig()
 	if err != nil {
 		klog.Warningf("ScanRootForDevices: failed to load config, proceeding with default behavior: %v", err)
