@@ -47,7 +47,6 @@ const (
 	getPreferredAllocationFlag = false
 	unix                       = "unix"
 	configPath                 = "/etc/power-device-plugin/config.json"
-	nxGzipDevicePath           = "crypto/nx-gzip"
 )
 
 // DevicePluginServer is a mandatory interface that must be implemented by all plugins.
@@ -384,23 +383,43 @@ func AppShutdown() error {
 
 // scans the local disk using ghw to find the blockdevices
 func ScanRootForDevices(nxGzipEnabled bool) ([]string, error) {
-	// relies on GHW_CHROOT=/host/dev
-	// lsblk -f --json --paths -s | jq -r '.blockdevices[] | select(.fstype != "xfs")' | grep mpath | grep -v fstype | sort -u | wc -l
-	// This may be the best way to get the devices.
 	config, err := loadDevicePluginConfig()
 	if err != nil {
 		klog.Warningf("ScanRootForDevices: failed to load config, proceeding with default behavior: %v", err)
 		config = &api.DevicePluginConfig{}
 	}
 
+	// The logic to discover, include and exclude disks dynamically. Steps are indicated with numbers
+	// 1) discover: List all block devices/block disks
+	devices, err := getBlockDevices()
+	if err != nil {
+		return nil, err
+	}
+
+	if nxGzipEnabled {
+		devices = append(devices, "/dev/crypto/nx-gzip")
+		klog.Infof("nx-gzip enabled: appended /dev/crypto/nx-gzip to devices")
+	}
+
+	// 2) exclude: using configmap exclude devices
+	filtered := applyExcludeFilters(devices, config.ExcludeDevices)
+
+	// 3) include: Only include devices that match the include patterns and exist on the host.
+	finalDevices := applyIncludeFilters(filtered, config.IncludeDevices)
+
+	klog.Infof("Final filtered device list: %v", finalDevices)
+	return finalDevices, nil
+}
+
+func getBlockDevices() ([]string, error) {
 	block, err := ghw.Block()
 	if err != nil {
 		fmt.Printf("Error getting block storage info: %v", err)
 		return nil, err
 	}
+
 	devices := []string{}
 	fmt.Printf("DEVICE: %v\n", block)
-
 	for _, disk := range block.Disks {
 		fmt.Printf("    - DISK: %v\n", disk.Name)
 		for _, part := range disk.Partitions {
@@ -409,66 +428,58 @@ func ScanRootForDevices(nxGzipEnabled bool) ([]string, error) {
 		}
 		devices = append(devices, "/dev/"+disk.Name)
 	}
+	return devices, nil
+}
 
-	if nxGzipEnabled {
-		devices = append(devices, "/dev/"+nxGzipDevicePath)
-		klog.Infof("nx-gzip enabled: appended /dev/crypto/nx-gzip to devices")
-	}
-
+func applyExcludeFilters(devices []string, excludes []string) []string {
 	filtered := []string{}
-
-	// Apply exclude patterns first
 	for _, dev := range devices {
-		if matchesAny(dev, config.ExcludeDevices) {
+		if matchesAny(dev, excludes) {
 			klog.Infof("Excluding device: %s", dev)
 			continue
 		}
 		filtered = append(filtered, dev)
 	}
+	return filtered
+}
 
-	finalDevices := []string{}
-
-	// Only include devices that match the include patterns and exist on the host.
-	useInclude := false
-	for _, item := range config.IncludeDevices {
-		if strings.TrimSpace(item) != "" {
-			useInclude = true
-			break
+func applyIncludeFilters(devices []string, includes []string) []string {
+	cleaned := []string{}
+	for _, item := range includes {
+		p := strings.TrimSpace(item)
+		if p == "" {
+			klog.Warningf("Include-devices contains an empty string. Dropping entry.")
+			continue
 		}
-
-		if item == "" {
-			klog.Warningf("Include-devices contains an empty string. Ignoring include-devices and proceeding with default behavior.")
+		cleaned = append(cleaned, p)
+	}
+	if len(cleaned) == 0 {
+		// No include logic, return everything (minus excludes)
+		final := []string{}
+		for _, dev := range devices {
+			final = append(final, strings.TrimPrefix(dev, "/dev/"))
 		}
+		return final
 	}
 
-	if useInclude {
-		klog.Infof("Include-devices specified, overriding with: %v", config.IncludeDevices)
-		for _, pattern := range config.IncludeDevices {
-			if strings.TrimSpace(pattern) == "" {
-				continue
-			}
-			matches, err := filepath.Glob(pattern)
-			if err != nil {
-				klog.Warningf("Invalid include pattern: %s, skipping. Error: %v", pattern, err)
-				continue
-			}
-			for _, dev := range matches {
-				if _, err := os.Stat(dev); err == nil {
-					finalDevices = append(finalDevices, strings.TrimPrefix(dev, "/dev/"))
-					klog.Infof("Included device: %s", dev)
-				} else {
-					klog.Warningf("Device does not exist or is inaccessible: %s", dev)
-				}
-			}
+	klog.Infof("Include-devices specified, overriding with: %v", cleaned)
+	final := []string{}
+	for _, pattern := range cleaned {
+		matches, err := filepath.Glob(pattern)
+		if err != nil {
+			klog.Warningf("Invalid include pattern: %s, skipping. Error: %v", pattern, err)
+			continue
 		}
-	} else {
-		for _, dev := range filtered {
-			finalDevices = append(finalDevices, strings.TrimPrefix(dev, "/dev/"))
+		for _, dev := range matches {
+			if _, err := os.Stat(dev); err == nil {
+				final = append(final, strings.TrimPrefix(dev, "/dev/"))
+				klog.V(4).Infof("Included device: %s", dev)
+			} else {
+				klog.Warningf("Device does not exist or is inaccessible: %s", dev)
+			}
 		}
 	}
-
-	klog.Infof("Final filtered device list: %v", finalDevices)
-	return finalDevices, nil
+	return final
 }
 
 func (m *PowerPlugin) GetAllocateFunc() func(r *pluginapi.AllocateRequest, devs map[string]pluginapi.Device) (*pluginapi.AllocateResponse, error) {
