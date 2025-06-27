@@ -435,7 +435,7 @@ func applyExcludeFilters(devices []string, excludes []string) []string {
 	filtered := []string{}
 	for _, dev := range devices {
 		if matchesAny(dev, excludes) {
-			klog.Infof("Excluding device: %s", dev)
+			klog.V(4).Infof("Excluding device: %s", dev)
 			continue
 		}
 		filtered = append(filtered, dev)
