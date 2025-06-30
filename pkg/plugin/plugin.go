@@ -105,7 +105,7 @@ func dial() (*grpc.ClientConn, error) {
 
 // Start starts the gRPC server of the device plugin
 func (p *PowerPlugin) Start() error {
-	config, err := loadDevicePluginConfig()
+	config, err := LoadDevicePluginConfig()
 	if err != nil {
 		klog.Warningf("Failed to load config file: %v. Proceeding without nx-gzip.", err)
 	}
@@ -197,7 +197,7 @@ func (p *PowerPlugin) Register(kubeletEndpoint, resourceName string) error {
 func (p *PowerPlugin) ListAndWatch(e *pluginapi.Empty, stream pluginapi.DevicePlugin_ListAndWatchServer) error {
 	klog.Infof("Listing devices: %v", p.devs)
 
-	go p.monitorSocketHealth()
+	go p.MonitorSocketHealth()
 
 	// Initial scan if devices list is empty
 	if len(p.devs) == 0 {
@@ -251,7 +251,7 @@ func (p *PowerPlugin) Allocate(ctx context.Context, reqs *pluginapi.AllocateRequ
 		return nil, err
 	}
 
-	config, err := loadDevicePluginConfig()
+	config, err := LoadDevicePluginConfig()
 	if err != nil {
 		klog.Warningf("Failed to load config: %v")
 	}
@@ -276,7 +276,7 @@ func (p *PowerPlugin) Allocate(ctx context.Context, reqs *pluginapi.AllocateRequ
 				// * w - allows container to write to the specified device.
 				// * m - allows container to create device files that do not yet exist.
 				// We don't need `m`
-				Permissions: getValidatedPermission(config),
+				Permissions: GetValidatedPermission(config),
 			}
 		}
 		responses.ContainerResponses = append(responses.ContainerResponses, &response)
@@ -381,12 +381,27 @@ func AppShutdown() error {
 	return nil
 }
 
+type DeviceScanner interface {
+	GetBlockDevices() ([]string, error)
+	LoadConfig() (*api.DevicePluginConfig, error)
+}
+
+type realDeviceScanner struct{}
+
+func (r realDeviceScanner) GetBlockDevices() ([]string, error) {
+	return getBlockDevices()
+}
+
+func (r realDeviceScanner) LoadConfig() (*api.DevicePluginConfig, error) {
+	return LoadDevicePluginConfig()
+}
+
 // scans the local disk using ghw to find the blockdevices
-func ScanRootForDevices(nxGzipEnabled bool) ([]string, error) {
+func ScanRootForDevicesWithDeps(scanner DeviceScanner, nxGzipEnabled bool) ([]string, error) {
 	// relies on GHW_CHROOT=/host/dev
 	// lsblk -f --json --paths -s | jq -r '.blockdevices[] | select(.fstype != "xfs")' | grep mpath | grep -v fstype | sort -u | wc -l
 	// This may be the best way to get the devices.
-	config, err := loadDevicePluginConfig()
+	config, err := scanner.LoadConfig()
 	if err != nil {
 		klog.Warningf("ScanRootForDevices: failed to load config, proceeding with default behavior: %v", err)
 		config = &api.DevicePluginConfig{}
@@ -394,7 +409,7 @@ func ScanRootForDevices(nxGzipEnabled bool) ([]string, error) {
 
 	// The logic to discover, include and exclude disks dynamically. Steps are indicated with numbers
 	// 1) discover: List all block devices/block disks
-	devices, err := getBlockDevices()
+	devices, err := scanner.GetBlockDevices()
 	if err != nil {
 		return nil, err
 	}
@@ -405,13 +420,17 @@ func ScanRootForDevices(nxGzipEnabled bool) ([]string, error) {
 	}
 
 	// 2) exclude: using configmap exclude devices
-	filtered := applyExcludeFilters(devices, config.ExcludeDevices)
+	filtered := ApplyExcludeFilters(devices, config.ExcludeDevices)
 
 	// 3) include: Only include devices that match the include patterns and exist on the host.
-	finalDevices := applyIncludeFilters(filtered, config.IncludeDevices)
+	finalDevices := ApplyIncludeFilters(filtered, config.IncludeDevices)
 
 	klog.Infof("Final filtered device list: %v", finalDevices)
 	return finalDevices, nil
+}
+
+func ScanRootForDevices(nxGzipEnabled bool) ([]string, error) {
+	return ScanRootForDevicesWithDeps(realDeviceScanner{}, nxGzipEnabled)
 }
 
 func getBlockDevices() ([]string, error) {
@@ -434,10 +453,10 @@ func getBlockDevices() ([]string, error) {
 	return devices, nil
 }
 
-func applyExcludeFilters(devices []string, excludes []string) []string {
+func ApplyExcludeFilters(devices []string, excludes []string) []string {
 	filtered := []string{}
 	for _, dev := range devices {
-		if matchesAny(dev, excludes) {
+		if MatchesAny(dev, excludes) {
 			klog.V(4).Infof("Excluding device: %s", dev)
 			continue
 		}
@@ -446,7 +465,7 @@ func applyExcludeFilters(devices []string, excludes []string) []string {
 	return filtered
 }
 
-func applyIncludeFilters(devices []string, includes []string) []string {
+func ApplyIncludeFilters(devices []string, includes []string) []string {
 	cleaned := []string{}
 	for _, item := range includes {
 		p := strings.TrimSpace(item)
@@ -493,7 +512,7 @@ func (m *PowerPlugin) GetAllocateFunc() func(r *pluginapi.AllocateRequest, devs 
 			return nil, err
 		}
 
-		config, err := loadDevicePluginConfig()
+		config, err := LoadDevicePluginConfig()
 		if err != nil {
 			klog.Warningf("Failed to load config: %v, err")
 		}
@@ -517,7 +536,7 @@ func (m *PowerPlugin) GetAllocateFunc() func(r *pluginapi.AllocateRequest, devs 
 					// * w - allows container to write to the specified device.
 					// * m - allows container to create device files that do not yet exist.
 					// We don't need `m`
-					Permissions: getValidatedPermission(config),
+					Permissions: GetValidatedPermission(config),
 				})
 			}
 
@@ -530,7 +549,7 @@ func (m *PowerPlugin) GetAllocateFunc() func(r *pluginapi.AllocateRequest, devs 
 }
 
 // monitoring socket health function
-func (p *PowerPlugin) monitorSocketHealth() {
+func (p *PowerPlugin) MonitorSocketHealth() {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
@@ -548,7 +567,7 @@ func (p *PowerPlugin) monitorSocketHealth() {
 }
 
 // Read config map file
-func loadDevicePluginConfig() (*api.DevicePluginConfig, error) {
+func LoadDevicePluginConfig() (*api.DevicePluginConfig, error) {
 	klog.Infof("Attempting to read config file from: %s", configPath)
 
 	info, err := os.Stat(filepath.Clean(configPath))
@@ -582,7 +601,7 @@ func loadDevicePluginConfig() (*api.DevicePluginConfig, error) {
 	return &config, nil
 }
 
-func getValidatedPermission(config *api.DevicePluginConfig) string {
+func GetValidatedPermission(config *api.DevicePluginConfig) string {
 	if config == nil {
 		klog.Infof("No config provided, using default device permission: 'rwm'")
 		return "rwm"
@@ -607,7 +626,7 @@ func getValidatedPermission(config *api.DevicePluginConfig) string {
 	return "rw"
 }
 
-func matchesAny(dev string, patterns []string) bool {
+func MatchesAny(dev string, patterns []string) bool {
 	for _, pattern := range patterns {
 		matched, err := filepath.Match(pattern, dev)
 		if err != nil {
