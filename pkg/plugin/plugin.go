@@ -384,6 +384,8 @@ func AppShutdown() error {
 type DeviceScanner interface {
 	GetBlockDevices() ([]string, error)
 	LoadConfig() (*api.DevicePluginConfig, error)
+	FindDevices(pattern string) ([]string, error)
+	StatDevice(path string) error
 }
 
 type realDeviceScanner struct{}
@@ -394,6 +396,15 @@ func (r realDeviceScanner) GetBlockDevices() ([]string, error) {
 
 func (r realDeviceScanner) LoadConfig() (*api.DevicePluginConfig, error) {
 	return LoadDevicePluginConfig()
+}
+
+func (r *realDeviceScanner) FindDevices(pattern string) ([]string, error) {
+	return filepath.Glob(pattern)
+}
+
+func (r *realDeviceScanner) StatDevice(path string) error {
+	_, err := os.Stat(path)
+	return err
 }
 
 // scans the local disk using ghw to find the blockdevices
@@ -423,14 +434,14 @@ func ScanRootForDevicesWithDeps(scanner DeviceScanner, nxGzipEnabled bool) ([]st
 	filtered := ApplyExcludeFilters(devices, config.ExcludeDevices)
 
 	// 3) include: Only include devices that match the include patterns and exist on the host.
-	finalDevices := ApplyIncludeFilters(filtered, config.IncludeDevices)
+	finalDevices := ApplyIncludeFilters(scanner, filtered, config.IncludeDevices)
 
 	klog.Infof("Final filtered device list: %v", finalDevices)
 	return finalDevices, nil
 }
 
 func ScanRootForDevices(nxGzipEnabled bool) ([]string, error) {
-	return ScanRootForDevicesWithDeps(realDeviceScanner{}, nxGzipEnabled)
+	return ScanRootForDevicesWithDeps(&realDeviceScanner{}, nxGzipEnabled)
 }
 
 func getBlockDevices() ([]string, error) {
@@ -465,7 +476,7 @@ func ApplyExcludeFilters(devices []string, excludes []string) []string {
 	return filtered
 }
 
-func ApplyIncludeFilters(devices []string, includes []string) []string {
+func ApplyIncludeFilters(scanner DeviceScanner, devices []string, includes []string) []string {
 	cleaned := []string{}
 	for _, item := range includes {
 		p := strings.TrimSpace(item)
@@ -475,8 +486,8 @@ func ApplyIncludeFilters(devices []string, includes []string) []string {
 		}
 		cleaned = append(cleaned, p)
 	}
+
 	if len(cleaned) == 0 {
-		// No include logic, return everything (minus excludes)
 		final := []string{}
 		for _, dev := range devices {
 			final = append(final, strings.TrimPrefix(dev, "/dev/"))
@@ -487,13 +498,13 @@ func ApplyIncludeFilters(devices []string, includes []string) []string {
 	klog.Infof("Include-devices specified, overriding with: %v", cleaned)
 	final := []string{}
 	for _, pattern := range cleaned {
-		matches, err := filepath.Glob(pattern)
+		matches, err := scanner.FindDevices(pattern)
 		if err != nil {
 			klog.Warningf("Invalid include pattern: %s, skipping. Error: %v", pattern, err)
 			continue
 		}
 		for _, dev := range matches {
-			if _, err := os.Stat(dev); err == nil {
+			if err := scanner.StatDevice(dev); err == nil {
 				final = append(final, strings.TrimPrefix(dev, "/dev/"))
 				klog.V(4).Infof("Included device: %s", dev)
 			} else {
