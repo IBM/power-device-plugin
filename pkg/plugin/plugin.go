@@ -87,7 +87,7 @@ func New() (*PowerPlugin, error) {
 		stop:    make(chan interface{}),
 		health:  make(chan *pluginapi.Device),
 		restart: make(chan struct{}, 1),
-        cache:   &DeviceCache{},
+		cache:   &DeviceCache{},
 	}, nil
 }
 
