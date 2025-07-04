@@ -16,14 +16,12 @@ limitations under the License.
 
 package api
 
-import "time"
-
 // DevicePluginConfig holds the configuration parsed from the ConfigMap
 type DevicePluginConfig struct {
-	NxGzip            bool          `json:"nx-gzip"`
-	Permissions       string        `json:"permissions"`               // Accepts: R, RW, RWM, RM, W, WM, M
-	IncludeDevices    []string      `json:"include-devices,omitempty"` // e.g., "/dev/dm-0", "/dev/dm-*"
-	ExcludeDevices    []string      `json:"exclude-devices,omitempty"` // e.g., "/dev/dm-3", "/dev/dm-*"
-	DiscoveryStrategy string        `json:"discovery-strategy"`        // "default" or "time"
-	ScanInterval      time.Duration `json:"scan-interval"`             // e.g., "60m", min 1m
+	NxGzip            bool     `json:"nx-gzip"`
+	Permissions       string   `json:"permissions"`               // Accepts: R, RW, RWM, RM, W, WM, M
+	IncludeDevices    []string `json:"include-devices,omitempty"` // e.g., "/dev/dm-0", "/dev/dm-*"
+	ExcludeDevices    []string `json:"exclude-devices,omitempty"` // e.g., "/dev/dm-3", "/dev/dm-*"
+	DiscoveryStrategy string   `json:"discovery-strategy"`        // "default" or "time"
+	ScanInterval      string   `json:"scan-interval"`             // e.g., "60m", min 1m
 }

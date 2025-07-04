@@ -64,7 +64,7 @@ type PowerPlugin struct {
 	server *grpc.Server
 
 	nxGzip bool
-	
+
 	config *api.DevicePluginConfig
 	cache  *DeviceCache
 
@@ -72,9 +72,9 @@ type PowerPlugin struct {
 }
 
 type DeviceCache struct {
-    Devices       []string
-    LastScanTime  time.Time
-    Mutex         sync.Mutex
+	Devices      []string
+	LastScanTime time.Time
+	Mutex        sync.Mutex
 }
 
 // Creates a Plugin
@@ -663,44 +663,45 @@ func MatchesAny(dev string, patterns []string) bool {
 }
 
 func (p *PowerPlugin) GetDiscoveredDevices() ([]string, error) {
-    strategy := "default"
-    if p.config != nil && p.config.DiscoveryStrategy != "" {
-        strategy = p.config.DiscoveryStrategy
-    }
+	strategy := "default"
+	if p.config != nil && p.config.DiscoveryStrategy != "" {
+		strategy = p.config.DiscoveryStrategy
+	}
 
-    if strategy == "time" {
-        p.cache.Mutex.Lock()
-        defer p.cache.Mutex.Unlock()
+	if strategy == "time" {
+		p.cache.Mutex.Lock()
+		defer p.cache.Mutex.Unlock()
 
-        now := time.Now().UTC()
+		now := time.Now().UTC()
 
-        // Default to 60 minutes if not set or invalid
-        interval := time.Minute * 60
-        if p.config != nil && p.config.ScanInterval > 0 {
-            interval = p.config.ScanInterval
-        }
+		// Default to 60 minutes if not set or invalid
+		interval, err := time.ParseDuration(p.config.ScanInterval)
+		if err != nil {
+			klog.Warningf("Invalid scan-interval '%s': %v. Using default 60m.", p.config.ScanInterval, err)
+			interval = time.Minute * 60
+		}
 
-        if len(p.cache.Devices) > 0 && now.Sub(p.cache.LastScanTime) < interval {
-            klog.Infof("Reusing cached devices. Last scan at: %v (Interval: %v)", p.cache.LastScanTime, interval)
-            return p.cache.Devices, nil
-        }
+		if len(p.cache.Devices) > 0 && now.Sub(p.cache.LastScanTime) < interval {
+			klog.Infof("Reusing cached devices. Last scan at: %v (Interval: %v)", p.cache.LastScanTime, interval)
+			return p.cache.Devices, nil
+		}
 
-        devices, err := ScanRootForDevices(p.nxGzip)
-        if err != nil {
-            klog.Warningf("Device scan failed: %v", err)
-            if len(p.cache.Devices) > 0 {
-                klog.Warning("Returning previously cached devices due to scan error.")
-                return p.cache.Devices, nil
-            }
-            return nil, err
-        }
+		devices, err := ScanRootForDevices(p.nxGzip)
+		if err != nil {
+			klog.Warningf("Device scan failed: %v", err)
+			if len(p.cache.Devices) > 0 {
+				klog.Warning("Returning previously cached devices due to scan error.")
+				return p.cache.Devices, nil
+			}
+			return nil, err
+		}
 
-        klog.Infof("Fresh scan successful. Caching result.")
-        p.cache.Devices = devices
-        p.cache.LastScanTime = now
-        return devices, nil
-    }
+		klog.Infof("Fresh scan successful. Caching result.")
+		p.cache.Devices = devices
+		p.cache.LastScanTime = now
+		return devices, nil
+	}
 
-    // default: always scan
-    return ScanRootForDevices(p.nxGzip)
+	// default: always scan
+	return ScanRootForDevices(p.nxGzip)
 }
