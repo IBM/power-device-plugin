@@ -675,8 +675,6 @@ func (p *PowerPlugin) GetDiscoveredDevices() ([]string, error) {
 	}
 
 	if strategy == "time" {
-		klog.Info("Discovery strategy is 'time'. Using scan interval logic.")
-
 		p.cache.Mutex.Lock()
 		defer p.cache.Mutex.Unlock()
 
@@ -699,7 +697,7 @@ func (p *PowerPlugin) GetDiscoveredDevices() ([]string, error) {
 		}
 
 		timeSinceLastScan := now.Sub(p.cache.LastScanTime)
-		klog.Infof("Time since last scan: %v", timeSinceLastScan)
+		klog.Infof("Time since last scan: %v (Last scan at: %v UTC)", timeSinceLastScan, p.cache.LastScanTime.UTC())
 		klog.Infof("Cached devices count: %d", len(p.cache.Devices))
 		klog.Infof("Configured scan interval: %v", interval)
 
