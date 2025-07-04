@@ -696,11 +696,12 @@ func (p *PowerPlugin) GetDiscoveredDevices() ([]string, error) {
 			klog.Warning("No scan-interval provided in config. Using default: 60m")
 		}
 
-		if p.cache.LastScanTime.IsZero() {
-			klog.Infof("No previous scan found. Starting first device scan.")
-		} else {
-			timeSinceLastScan := now.Sub(p.cache.LastScanTime)
+		var timeSinceLastScan time.Duration
+		if !p.cache.LastScanTime.IsZero() {
+			timeSinceLastScan = now.Sub(p.cache.LastScanTime)
 			klog.Infof("Time since last scan: %v (Last scan at: %v UTC)", timeSinceLastScan, p.cache.LastScanTime.UTC())
+		} else {
+			klog.Infof("No previous scan found. Starting first device scan.")
 		}
 
 		klog.Infof("Cached devices count: %d", len(p.cache.Devices))
