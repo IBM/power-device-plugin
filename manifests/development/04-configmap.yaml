@@ -9,5 +9,7 @@ data:
       "nx-gzip": true,
       "permissions": "rw",
       "include-devices": ["/dev/dm-*", "/dev/crypto/nx-gzip"],
-      "exclude-devices": ["/dev/dm-3"]
+      "exclude-devices": ["/dev/dm-3"],
+      "discovery-strategy": "time",
+      "scan-interval": "1m"
     }

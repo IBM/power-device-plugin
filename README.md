@@ -4,6 +4,40 @@ Power Device Plugin adds protected devices into a non-privileged container. The 
 
 The Power Device Plugin is a generic solution. The term Power refer to the IBM Power Systems where this solution was first created. The image is available for amd64, s390x and ppc64le.
 
+## Device Plugin Config (`config.json`)
+
+You can configure the behavior of the Power Device Plugin using a ConfigMap, which gets mounted at `/etc/power-device-plugin/config.json`. Below is the list of supported fields:
+
+### Sample ConfigMap (YAML)
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: power-device-config
+  namespace: power-device-plugin
+data:
+  config.json: |
+    {
+      "nx-gzip": true,
+      "permissions": "rw",
+      "include-devices": ["/dev/dm-*", "/dev/crypto/nx-gzip"],
+      "exclude-devices": ["/dev/dm-3"],
+      "discovery-strategy": "time",
+      "scan-interval": "60m"
+    }
+```
+
+| Field                | Type       |Description                                                                                                                         | Default   |
+| -------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| `nx-gzip`            | `boolean`  | Enables support for NX-GZIP hardware offloading (e.g., `/dev/crypto/nx-gzip`)                                                       | `false`   |
+| `permissions`        | `string`   | Cgroup permissions to assign to devices. Valid values: `r`, `w`, `m`, `rw`, `rm`, `wm`, `rwm`                                       | `rw`     |
+| `include-devices`    | `[]string` | List of glob patterns (e.g., `/dev/dm-*`) to **explicitly include**. If empty, all detected devices are included (minus excludes).  | `All`      |
+| `exclude-devices`    | `[]string` | List of glob patterns for devices to exclude from plugin registration. Useful to avoid certain device paths.                        | `None`      |
+| `discovery-strategy` | `string`   | Strategy for scanning devices. Options: `default` — scan on every call, or `time` — cache scan for a duration defined below         | `default` |
+| `scan-interval`      | `string`   | When `discovery-strategy` is `time`, this defines how often (e.g., `"30s"`, `"10m"`, `"2h"`) to perform a fresh scan                | `"60m"`   |
+
+
 ## Steps
 
 ### Installation
