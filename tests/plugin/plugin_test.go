@@ -19,6 +19,7 @@ package plugin_test
 import (
 	"errors"
 	"testing"
+	"time"
 
 	api "github.com/ocp-power-demos/power-dev-plugin/api"
 	"github.com/ocp-power-demos/power-dev-plugin/pkg/plugin"
@@ -27,15 +28,18 @@ import (
 
 // mock scanner with support for FindDevices
 type mockScanner struct {
-	devices     []string
-	config      *api.DevicePluginConfig
+	devices      []string
+	config       *api.DevicePluginConfig
 	errorOnBlock error
-	findResults map[string][]string
+	findResults  map[string][]string
+	simulateScanError bool
 }
 
 func (m mockScanner) GetBlockDevices() ([]string, error) {
 	if m.errorOnBlock != nil {
 		return nil, m.errorOnBlock
+	} else if m.simulateScanError {
+		return nil, errors.New("mock scan failure")
 	}
 	return m.devices, nil
 }
@@ -63,7 +67,7 @@ func (m mockScanner) StatDevice(path string) error {
 	return errors.New("not found")
 }
 
-func TestScanRootForDevicesWithDeps_Refactored(t *testing.T) {
+func TestScanRootForDevicesWithDeps(t *testing.T) {
 	tests := []struct {
 		name        string
 		devices     []string
@@ -91,7 +95,7 @@ func TestScanRootForDevicesWithDeps_Refactored(t *testing.T) {
 			findResults: map[string][]string{},
 			config:      &api.DevicePluginConfig{},
 			nxGzip:      true,
-			wantResult:  []string{"sda", "dm-0", "crypto/nx-gzip"},
+			wantResult:  []string{"/dev/sda", "/dev/dm-0", "/dev/crypto/nx-gzip"},
 		},
 		{
 			name:    "Invalid include pattern",
@@ -229,6 +233,133 @@ func TestMatchesAny(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := plugin.MatchesAny(tt.device, tt.patterns)
 			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestGetDiscoveredDevices_TimeStrategy(t *testing.T) {
+	tests := []struct {
+		name              string
+		lastScanTime      time.Time
+		cachedDevices     []string
+		config            *api.DevicePluginConfig
+		expectCached      bool
+		expectError       bool
+		simulateScanError bool
+		devices           []string
+	}{
+		{
+			name:          "Fresh scan due to no previous scan",
+			lastScanTime:  time.Time{},
+			cachedDevices: []string{},
+			config: &api.DevicePluginConfig{
+				DiscoveryStrategy: "time",
+				ScanInterval:      "1m",
+			},
+			devices: []string{"/dev/dm-0", "/dev/dm-1"},
+		},
+		{
+			name:          "Skip scan due to valid cache",
+			lastScanTime:  time.Now().Add(-30 * time.Second),
+			cachedDevices: []string{"/dev/dm-0", "/dev/dm-1"},
+			config: &api.DevicePluginConfig{
+				DiscoveryStrategy: "time",
+				ScanInterval:      "1m",
+			},
+			expectCached: true,
+		},
+		{
+			name:          "Trigger scan because interval passed",
+			lastScanTime:  time.Now().Add(-2 * time.Minute),
+			cachedDevices: []string{"/dev/dm-0"},
+			config: &api.DevicePluginConfig{
+				DiscoveryStrategy: "time",
+				ScanInterval:      "1m",
+			},
+			devices: []string{"/dev/dm-0", "/dev/dm-1"},
+		},
+		{
+			name:          "Fallback to cached on scan failure",
+			lastScanTime:  time.Now().Add(-2 * time.Minute),
+			cachedDevices: []string{"/dev/dm-0", "/dev/dm-1"},
+			config: &api.DevicePluginConfig{
+				DiscoveryStrategy: "time",
+				ScanInterval:      "1m",
+			},
+			simulateScanError: true,
+			expectCached: true,
+		},
+		{
+			name:          "No scan-interval provided in config",
+			lastScanTime:  time.Time{},
+			cachedDevices: []string{},
+			config: &api.DevicePluginConfig{
+				DiscoveryStrategy: "time",
+			},
+			devices: []string{"/dev/dm-0", "/dev/dm-1"},
+		},
+		{
+			name: "Invalid scan-interval format",
+			lastScanTime: time.Time{},
+			cachedDevices: []string{},
+			config: &api.DevicePluginConfig{
+				DiscoveryStrategy: "time",
+				ScanInterval: "bad-format",
+			},
+			devices: []string{"/dev/dm-0", "/dev/dm-1"},
+		},
+		{
+			name: "Non-time strategy (default)",
+			lastScanTime: time.Now().Add(-10 * time.Second),
+			cachedDevices: []string{"/dev/dm-0"},
+			config: &api.DevicePluginConfig{
+				DiscoveryStrategy: "default",
+			},
+			devices: []string{"/dev/dm-0", "/dev/dm-1"},
+		},
+		{
+			name:          "Return error on scan failure and no cache",
+			lastScanTime:  time.Now().Add(-2 * time.Minute),
+			cachedDevices: []string{},
+			config: &api.DevicePluginConfig{
+				DiscoveryStrategy: "time",
+				ScanInterval:      "1m",
+			},
+			simulateScanError: true,
+			expectError:       true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := &plugin.PowerPlugin{
+				Config: tt.config,
+				Cache: &plugin.DeviceCache{
+					Devices:      tt.cachedDevices,
+					LastScanTime: tt.lastScanTime,
+				},
+				Scanner: mockScanner{
+					simulateScanError: tt.simulateScanError,
+					devices:           tt.devices,
+					config:            tt.config,
+				},
+			}
+
+			devs, err := p.GetDiscoveredDevices()
+			if tt.expectError {
+				assert.Error(t, err)
+				assert.Nil(t, devs)
+				return
+			}
+
+			assert.NoError(t, err)
+
+			expectedDevices := tt.cachedDevices
+			if !tt.expectCached {
+				expectedDevices = tt.devices
+			}
+
+			assert.Equal(t, expectedDevices, devs)
 		})
 	}
 }

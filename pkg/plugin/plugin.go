@@ -63,10 +63,9 @@ type PowerPlugin struct {
 
 	server *grpc.Server
 
-	nxGzip bool
-
-	config *api.DevicePluginConfig
-	cache  *DeviceCache
+	Config  *api.DevicePluginConfig
+	Cache   *DeviceCache
+	Scanner DeviceScanner
 
 	pluginapi.DevicePluginServer
 }
@@ -87,7 +86,7 @@ func New() (*PowerPlugin, error) {
 		stop:    make(chan interface{}),
 		health:  make(chan *pluginapi.Device),
 		restart: make(chan struct{}, 1),
-		cache:   &DeviceCache{},
+		Cache:   &DeviceCache{},
 	}, nil
 }
 
@@ -120,9 +119,7 @@ func (p *PowerPlugin) Start() error {
 		klog.Warningf("Failed to load config file: %v. Proceeding without nx-gzip.", err)
 	}
 
-	p.config = config
-	p.nxGzip = config != nil && config.NxGzip
-	klog.Infof("nxGzip enabled: %v", p.nxGzip)
+	p.Config = config
 
 	devices, err := p.GetDiscoveredDevices()
 	if err != nil {
@@ -426,6 +423,9 @@ func ScanRootForDevicesWithDeps(scanner DeviceScanner, nxGzipEnabled bool) ([]st
 	config, err := scanner.LoadConfig()
 	if err != nil {
 		klog.Warningf("ScanRootForDevices: failed to load config, proceeding with default behavior: %v", err)
+	}
+	if config == nil {
+		klog.Warning("ScanRootForDevices: config is nil, using empty config")
 		config = &api.DevicePluginConfig{}
 	}
 
@@ -451,10 +451,6 @@ func ScanRootForDevicesWithDeps(scanner DeviceScanner, nxGzipEnabled bool) ([]st
 	return finalDevices, nil
 }
 
-func ScanRootForDevices(nxGzipEnabled bool) ([]string, error) {
-	return ScanRootForDevicesWithDeps(&realDeviceScanner{}, nxGzipEnabled)
-}
-
 func getBlockDevices() ([]string, error) {
 	block, err := ghw.Block()
 	if err != nil {
@@ -476,6 +472,9 @@ func getBlockDevices() ([]string, error) {
 }
 
 func ApplyExcludeFilters(devices []string, excludes []string) []string {
+	if excludes == nil {
+		return devices
+	}
 	filtered := []string{}
 	for _, dev := range devices {
 		if MatchesAny(dev, excludes) {
@@ -488,6 +487,9 @@ func ApplyExcludeFilters(devices []string, excludes []string) []string {
 }
 
 func ApplyIncludeFilters(scanner DeviceScanner, devices []string, includes []string) []string {
+	if includes == nil {
+		return devices
+	}
 	cleaned := []string{}
 	for _, item := range includes {
 		p := strings.TrimSpace(item)
@@ -667,16 +669,27 @@ func (p *PowerPlugin) GetDiscoveredDevices() ([]string, error) {
 
 	// Determine strategy
 	strategy := "default"
-	if p.config != nil && p.config.DiscoveryStrategy != "" {
-		strategy = p.config.DiscoveryStrategy
+	if p.Config != nil && p.Config.DiscoveryStrategy != "" {
+		strategy = p.Config.DiscoveryStrategy
 		klog.Infof("Discovery strategy set to: %s", strategy)
 	} else {
 		klog.Info("No discovery strategy specified, using default")
 	}
 
+	nxGzip := false
+	if p.Config != nil {
+		nxGzip = p.Config.NxGzip
+	}
+	klog.Infof("nxGzip enabled: %v", nxGzip)
+
+	scanner := p.Scanner
+	if scanner == nil {
+		scanner = &realDeviceScanner{}
+	}
+
 	if strategy == "time" {
-		p.cache.Mutex.Lock()
-		defer p.cache.Mutex.Unlock()
+		p.Cache.Mutex.Lock()
+		defer p.Cache.Mutex.Unlock()
 
 		now := time.Now().UTC()
 		klog.Infof("Current time: %v", now)
@@ -684,10 +697,10 @@ func (p *PowerPlugin) GetDiscoveredDevices() ([]string, error) {
 		interval := 60 * time.Minute // fallback default
 		klog.Infof("Default interval is: %v", interval)
 
-		if p.config != nil && p.config.ScanInterval != "" {
-			parsedInterval, err := time.ParseDuration(p.config.ScanInterval)
+		if p.Config != nil && p.Config.ScanInterval != "" {
+			parsedInterval, err := time.ParseDuration(p.Config.ScanInterval)
 			if err != nil {
-				klog.Warningf("Invalid scan-interval '%s': %v. Using default interval: %v", p.config.ScanInterval, err, interval)
+				klog.Warningf("Invalid scan-interval '%s': %v. Using default interval: %v", p.Config.ScanInterval, err, interval)
 			} else {
 				interval = parsedInterval
 				klog.Infof("Parsed scan-interval successfully: %v", interval)
@@ -697,42 +710,43 @@ func (p *PowerPlugin) GetDiscoveredDevices() ([]string, error) {
 		}
 
 		var timeSinceLastScan time.Duration
-		if !p.cache.LastScanTime.IsZero() {
-			timeSinceLastScan = now.Sub(p.cache.LastScanTime)
-			klog.Infof("Time since last scan: %v (Last scan at: %v UTC)", timeSinceLastScan, p.cache.LastScanTime.UTC())
+		if !p.Cache.LastScanTime.IsZero() {
+			timeSinceLastScan = now.Sub(p.Cache.LastScanTime)
+			klog.Infof("Time since last scan: %v (Last scan at: %v UTC)", timeSinceLastScan, p.Cache.LastScanTime.UTC())
 		} else {
 			klog.Infof("No previous scan found. Starting first device scan.")
 		}
 
-		klog.Infof("Cached devices count: %d", len(p.cache.Devices))
+		klog.Infof("Cached devices count: %d", len(p.Cache.Devices))
 		klog.Infof("Configured scan interval: %v", interval)
 
-		if len(p.cache.Devices) > 0 && timeSinceLastScan < interval {
-			klog.Infof("Skipping rescan. Using cached devices. Next scan after: %v", p.cache.LastScanTime.Add(interval))
-			return p.cache.Devices, nil
+		if len(p.Cache.Devices) > 0 && timeSinceLastScan < interval {
+			klog.Infof("Skipping rescan. Using cached devices. Next scan after: %v", p.Cache.LastScanTime.Add(interval))
+			return p.Cache.Devices, nil
 		}
 
 		klog.Infof("Triggering fresh scan now (reason: interval passed or cache empty).")
-		devices, err := ScanRootForDevices(p.nxGzip)
+		klog.Infof("scanner: %v", scanner)
+		devices, err := ScanRootForDevicesWithDeps(scanner, nxGzip)
 		if err != nil {
 			klog.Errorf("Scan failed: %v", err)
-			if len(p.cache.Devices) > 0 {
+			if len(p.Cache.Devices) > 0 {
 				klog.Warning("Falling back to cached devices due to scan failure.")
-				return p.cache.Devices, nil
+				return p.Cache.Devices, nil
 			}
 			klog.Error("No cached devices available, returning error.")
 			return nil, err
 		}
 
 		klog.Infof("Scan successful. Found %d devices.", len(devices))
-		p.cache.Devices = devices
-		p.cache.LastScanTime = now
+		p.Cache.Devices = devices
+		p.Cache.LastScanTime = now
 		klog.Infof("Devices cached. Next scan will occur after: %v", now.Add(interval))
 		return devices, nil
 	}
 
 	klog.Infof("Discovery strategy is '%s'. Performing fresh scan every call.", strategy)
-	devices, err := ScanRootForDevices(p.nxGzip)
+	devices, err := ScanRootForDevicesWithDeps(scanner, nxGzip)
 	if err != nil {
 		klog.Errorf("Scan failed during default strategy: %v", err)
 		return nil, err
