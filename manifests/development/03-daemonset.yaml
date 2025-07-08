@@ -92,6 +92,9 @@ spec:
         - name: plugin-config
           mountPath: /etc/power-device-plugin
           readOnly: true
+        - name: host-dev
+          mountPath: /host/dev
+          readOnly: true
         serviceAccount: power-device-plugin
         serviceAccountName: power-device-plugin
         securityContext:
@@ -128,6 +131,10 @@ spec:
            items:
            - key: config.json
              path: config.json
+       - name: host-dev
+         hostPath:
+             path: /dev
+             type: Directory
       priorityClassName: system-node-critical
       hostPID: true
       hostIPC: true
