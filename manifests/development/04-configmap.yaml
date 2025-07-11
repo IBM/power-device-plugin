@@ -11,5 +11,6 @@ data:
       "include-devices": ["/dev/dm-*", "/dev/crypto/nx-gzip"],
       "exclude-devices": ["/dev/dm-3"],
       "discovery-strategy": "time",
-      "scan-interval": "1m"
+      "scan-interval": "1m",
+      "upper-limit": 2
     }

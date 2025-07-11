@@ -67,6 +67,9 @@ type PowerPlugin struct {
 	Cache   *DeviceCache
 	Scanner DeviceScanner
 
+	deviceUsage map[string]int
+	usageLock   sync.Mutex
+
 	pluginapi.DevicePluginServer
 }
 
@@ -81,12 +84,13 @@ func New() (*PowerPlugin, error) {
 	// Empty array to start.
 	var devs []string = []string{}
 	return &PowerPlugin{
-		devs:    devs,
-		socket:  socket,
-		stop:    make(chan interface{}),
-		health:  make(chan *pluginapi.Device),
-		restart: make(chan struct{}, 1),
-		Cache:   &DeviceCache{},
+		devs:        devs,
+		socket:      socket,
+		stop:        make(chan interface{}),
+		health:      make(chan *pluginapi.Device),
+		restart:     make(chan struct{}, 1),
+		Cache:       &DeviceCache{},
+		deviceUsage: make(map[string]int),
 	}, nil
 }
 
@@ -249,7 +253,7 @@ func (p *PowerPlugin) ListAndWatch(e *pluginapi.Empty, stream pluginapi.DevicePl
 	}
 }
 
-// Allocate which return list of devices.
+// Allocate returns list of devices for the container request.
 func (p *PowerPlugin) Allocate(ctx context.Context, reqs *pluginapi.AllocateRequest) (*pluginapi.AllocateResponse, error) {
 	klog.Infof("Allocate request: %v", reqs)
 
@@ -264,31 +268,51 @@ func (p *PowerPlugin) Allocate(ctx context.Context, reqs *pluginapi.AllocateRequ
 		klog.Warningf("Failed to load config: %v")
 	}
 
+	upperLimit := config.UpperLimitPerDevice
+	if upperLimit <= 0 {
+		upperLimit = 1 // default to 1
+	}
+
+	p.usageLock.Lock()
+	defer p.usageLock.Unlock()
+
 	responses := pluginapi.AllocateResponse{}
 	for _, req := range reqs.ContainerRequests {
-		klog.Infoln("Container requests device: ", req)
-		ds := make([]*pluginapi.DeviceSpec, len(devices))
+		klog.Infof("Container requests device: %v", req)
+		ds := []*pluginapi.DeviceSpec{}
+		allocated := 0
+
+		for _, dev := range devices {
+			if p.deviceUsage[dev] < upperLimit {
+				p.deviceUsage[dev]++
+				ds = append(ds, &pluginapi.DeviceSpec{
+					HostPath:      "/dev/" + dev,
+					ContainerPath: "/dev/" + dev,
+					// Per DeviceSpec:
+					// Cgroups permissions of the device, candidates are one or more of
+					// * r - allows container to read from the specified device.
+					// * w - allows container to write to the specified device.
+					// * m - allows container to create device files that do not yet exist.
+					// We don't need `m`
+					Permissions: GetValidatedPermission(config),
+				})
+				allocated++
+				if allocated >= len(req.DevicesIDs) {
+					break
+				}
+			}
+		}
+
+		if allocated < len(req.DevicesIDs) {
+			return nil, fmt.Errorf("not enough available devices to satisfy request")
+		}
 
 		response := pluginapi.ContainerAllocateResponse{
 			Devices: ds,
 		}
-
-		// Originally req.DeviceIds
-		for i := range devices {
-			ds[i] = &pluginapi.DeviceSpec{
-				HostPath:      "/dev/" + devices[i],
-				ContainerPath: "/dev/" + devices[i],
-				// Per DeviceSpec:
-				// Cgroups permissions of the device, candidates are one or more of
-				// * r - allows container to read from the specified device.
-				// * w - allows container to write to the specified device.
-				// * m - allows container to create device files that do not yet exist.
-				// We don't need `m`
-				Permissions: GetValidatedPermission(config),
-			}
-		}
 		responses.ContainerResponses = append(responses.ContainerResponses, &response)
 	}
+
 	klog.Infof("Allocate response: %v", responses)
 	return &responses, nil
 }
@@ -343,31 +367,6 @@ func (p *PowerPlugin) Serve() error {
 	klog.Infof("Registered device plugin with Kubelet")
 	return nil
 }
-
-// func (p *PowerPlugin) Run() int {
-// 	klog.V(0).Info("Start Run")
-// 	stopCh := make(chan struct{})
-// 	defer close(stopCh)
-
-// 	exitCh := make(chan error)
-// 	defer close(exitCh)
-
-// 	for {
-// 		select {
-// 		case <-stopCh:
-// 			klog.V(0).Info("Run(): stopping plugin")
-// 			return 0
-// 		case err := <-exitCh:
-// 			klog.Error(err, "got an error", err)
-// 			return 99
-// 		}
-// 	}
-// }
-
-// Kublet may restart, and we'll need to restart.
-// func monitorPluginRegistration() error {
-// 	return nil
-// }
 
 // Captures the Signal to shutdown the container and dispatches to the Application
 func SystemShutdown() {
