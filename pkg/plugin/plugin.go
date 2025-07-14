@@ -266,28 +266,33 @@ func (p *PowerPlugin) Allocate(ctx context.Context, reqs *pluginapi.AllocateRequ
 
 	config, err := LoadDevicePluginConfig()
 	if err != nil {
-		klog.Warningf("Failed to load config: %v")
+		klog.Warningf("Failed to load config: %v", err)
 	}
 
 	upperLimit := config.UpperLimitPerDevice
 	if upperLimit <= 0 {
-		upperLimit = 1 // default to 1
+		upperLimit = 1 // default fallback
 	}
-
-	p.usageLock.Lock()
-	defer p.usageLock.Unlock()
+	klog.Infof("Using upper-limit per device: %d", upperLimit)
 
 	responses := pluginapi.AllocateResponse{}
-	for _, req := range reqs.ContainerRequests {
-		klog.Infof("Container requests device: %v", req)
+
+	for i, req := range reqs.ContainerRequests {
+		klog.Infof("Handling container request %d: %+v", i, req)
+
 		ds := []*pluginapi.DeviceSpec{}
 		allocated := 0
+
 		p.usageLock.Lock()
+		klog.Infof("Current device usage: %+v", p.DeviceUsage)
 		for _, dev := range devices {
 			count := p.DeviceUsage[dev]
+			klog.Infof("Evaluating device %s: current usage=%d, limit=%d", dev, count, upperLimit)
+
 			if count < upperLimit {
 				p.DeviceUsage[dev]++
-				// Add this dev to allocation response
+				klog.Infof("Allocating device %s to container. New usage: %d", dev, p.DeviceUsage[dev])
+
 				ds = append(ds, &pluginapi.DeviceSpec{
 					HostPath:      "/dev/" + dev,
 					ContainerPath: "/dev/" + dev,
@@ -300,25 +305,29 @@ func (p *PowerPlugin) Allocate(ctx context.Context, reqs *pluginapi.AllocateRequ
 					Permissions:   GetValidatedPermission(config),
 				})
 				allocated++
-				if allocated >= 1 { // allocating one device per container
+
+				if allocated >= 1 { // Allocate 1 device per container
 					break
 				}
+			} else {
+				klog.Infof("Device %s reached upper-limit; skipping", dev)
 			}
 		}
 		p.usageLock.Unlock()
 
-
-		if allocated < len(req.DevicesIDs) {
-			return nil, fmt.Errorf("not enough available devices to satisfy request")
+		if allocated == 0 {
+			klog.Errorf("Insufficient devices: requested=1, allocated=0 for container %d", i)
+			return nil, fmt.Errorf("not enough available devices to satisfy request for container %d", i)
 		}
 
 		response := pluginapi.ContainerAllocateResponse{
 			Devices: ds,
 		}
+		klog.Infof("Allocate response for container %d: %+v", i, response)
 		responses.ContainerResponses = append(responses.ContainerResponses, &response)
 	}
 
-	klog.Infof("Allocate response: %v", responses)
+	klog.Infof("Final Allocate response for all containers: %+v", responses)
 	return &responses, nil
 }
 
