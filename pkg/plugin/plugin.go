@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"k8s.io/klog"
+
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 )
 
@@ -67,7 +68,7 @@ type PowerPlugin struct {
 	Cache   *DeviceCache
 	Scanner DeviceScanner
 
-	deviceUsage map[string]int
+	DeviceUsage map[string]int
 	usageLock   sync.Mutex
 
 	pluginapi.DevicePluginServer
@@ -90,7 +91,7 @@ func New() (*PowerPlugin, error) {
 		health:      make(chan *pluginapi.Device),
 		restart:     make(chan struct{}, 1),
 		Cache:       &DeviceCache{},
-		deviceUsage: make(map[string]int),
+		DeviceUsage: make(map[string]int),
 	}, nil
 }
 
@@ -281,10 +282,12 @@ func (p *PowerPlugin) Allocate(ctx context.Context, reqs *pluginapi.AllocateRequ
 		klog.Infof("Container requests device: %v", req)
 		ds := []*pluginapi.DeviceSpec{}
 		allocated := 0
-
+		p.usageLock.Lock()
 		for _, dev := range devices {
-			if p.deviceUsage[dev] < upperLimit {
-				p.deviceUsage[dev]++
+			count := p.DeviceUsage[dev]
+			if count < upperLimit {
+				p.DeviceUsage[dev]++
+				// Add this dev to allocation response
 				ds = append(ds, &pluginapi.DeviceSpec{
 					HostPath:      "/dev/" + dev,
 					ContainerPath: "/dev/" + dev,
@@ -294,14 +297,16 @@ func (p *PowerPlugin) Allocate(ctx context.Context, reqs *pluginapi.AllocateRequ
 					// * w - allows container to write to the specified device.
 					// * m - allows container to create device files that do not yet exist.
 					// We don't need `m`
-					Permissions: GetValidatedPermission(config),
+					Permissions:   GetValidatedPermission(config),
 				})
 				allocated++
-				if allocated >= len(req.DevicesIDs) {
+				if allocated >= 1 { // allocating one device per container
 					break
 				}
 			}
 		}
+		p.usageLock.Unlock()
+
 
 		if allocated < len(req.DevicesIDs) {
 			return nil, fmt.Errorf("not enough available devices to satisfy request")

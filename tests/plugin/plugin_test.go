@@ -17,6 +17,7 @@ limitations under the License.
 package plugin_test
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -24,14 +25,16 @@ import (
 	api "github.com/ocp-power-demos/power-dev-plugin/api"
 	"github.com/ocp-power-demos/power-dev-plugin/pkg/plugin"
 	"github.com/stretchr/testify/assert"
+
+	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 )
 
 // mock scanner with support for FindDevices
 type mockScanner struct {
-	devices      []string
-	config       *api.DevicePluginConfig
-	errorOnBlock error
-	findResults  map[string][]string
+	devices           []string
+	config            *api.DevicePluginConfig
+	errorOnBlock      error
+	findResults       map[string][]string
 	simulateScanError bool
 }
 
@@ -287,7 +290,7 @@ func TestGetDiscoveredDevices_TimeStrategy(t *testing.T) {
 				ScanInterval:      "1m",
 			},
 			simulateScanError: true,
-			expectCached: true,
+			expectCached:      true,
 		},
 		{
 			name:          "No scan-interval provided in config",
@@ -299,18 +302,18 @@ func TestGetDiscoveredDevices_TimeStrategy(t *testing.T) {
 			devices: []string{"/dev/dm-0", "/dev/dm-1"},
 		},
 		{
-			name: "Invalid scan-interval format",
-			lastScanTime: time.Time{},
+			name:          "Invalid scan-interval format",
+			lastScanTime:  time.Time{},
 			cachedDevices: []string{},
 			config: &api.DevicePluginConfig{
 				DiscoveryStrategy: "time",
-				ScanInterval: "bad-format",
+				ScanInterval:      "bad-format",
 			},
 			devices: []string{"/dev/dm-0", "/dev/dm-1"},
 		},
 		{
-			name: "Non-time strategy (default)",
-			lastScanTime: time.Now().Add(-10 * time.Second),
+			name:          "Non-time strategy (default)",
+			lastScanTime:  time.Now().Add(-10 * time.Second),
 			cachedDevices: []string{"/dev/dm-0"},
 			config: &api.DevicePluginConfig{
 				DiscoveryStrategy: "default",
@@ -362,4 +365,45 @@ func TestGetDiscoveredDevices_TimeStrategy(t *testing.T) {
 			assert.Equal(t, expectedDevices, devs)
 		})
 	}
+}
+
+func TestAllocateUpperLimit(t *testing.T) {
+	scanner := mockScanner{
+		devices: []string{"/dev/sda", "/dev/sdb"},
+		config: &api.DevicePluginConfig{
+			UpperLimitPerDevice: 1,
+		},
+		findResults: map[string][]string{
+			"*": {"/dev/sda", "/dev/sdb"},
+		},
+	}
+
+	plugin := &plugin.PowerPlugin{
+		Scanner:     scanner,
+		Config:      scanner.config,
+		DeviceUsage: map[string]int{},
+	}
+
+	// Each container requests a device (same list returned from scanner)
+	req := &pluginapi.AllocateRequest{
+		ContainerRequests: []*pluginapi.ContainerAllocateRequest{
+			{DevicesIDs: []string{"sda"}},
+			{DevicesIDs: []string{"sdb"}},
+			{DevicesIDs: []string{"sda"}}, // this third one should exceed upperLimit
+		},
+	}
+
+	// First two allocations should succeed
+	_, err := plugin.Allocate(context.Background(), &pluginapi.AllocateRequest{
+		ContainerRequests: req.ContainerRequests[:2],
+	})
+	assert.NoError(t, err)
+
+	// Third should fail due to sda upperLimit = 1
+	_, err = plugin.Allocate(context.Background(), &pluginapi.AllocateRequest{
+		ContainerRequests: []*pluginapi.ContainerAllocateRequest{
+			{DevicesIDs: []string{"sda"}},
+		},
+	})
+	assert.Error(t, err, "Expected allocation to fail due to exceeding upper limit")
 }
