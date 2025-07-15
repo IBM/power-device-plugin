@@ -407,3 +407,103 @@ func TestAllocateUpperLimit(t *testing.T) {
 	})
 	assert.Error(t, err, "Expected allocation to fail due to exceeding upper limit")
 }
+
+func TestAllocate_UpperLimitScenarios(t *testing.T) {
+	tests := []struct {
+		name             string
+		upperLimit       int
+		initialUsage     map[string]int
+		availableDevices []string
+		requested        [][]string
+		expectError      bool
+		expectAllocated  int
+	}{
+		{
+			name:             "Unique devices per container",
+			upperLimit:       1,
+			availableDevices: []string{"/dev/sda", "/dev/sdb"},
+			requested:        [][]string{{"sda"}, {"sdb"}},
+			expectError:      false,
+			expectAllocated:  2,
+		},
+		{
+			name:             "Device exceeds upper limit",
+			upperLimit:       1,
+			availableDevices: []string{"/dev/sda"},
+			requested:        [][]string{{"sda"}, {"sda"}},
+			expectError:      true,
+			expectAllocated:  1,
+		},
+		{
+			name:             "Negative upper limit defaults to 1",
+			upperLimit:       -1,
+			availableDevices: []string{"/dev/sda"},
+			requested:        [][]string{{"sda"}, {"sda"}},
+			expectError:      true,
+			expectAllocated:  1,
+		},
+		{
+			name:             "Mixed success with multiple requests",
+			upperLimit:       1,
+			availableDevices: []string{"/dev/sda", "/dev/sdb"},
+			requested:        [][]string{{"sda"}, {"sdb"}, {"sda"}},
+			expectError:      true,
+			expectAllocated:  2,
+		},
+		{
+			name:             "All devices hit upper limit before allocation",
+			upperLimit:       1,
+			initialUsage: map[string]int{"/dev/sda": 1, "/dev/sdb": 1},
+			availableDevices: []string{"/dev/sda", "/dev/sdb"},
+			requested:        [][]string{{"sda"}, {"sdb"}},
+			expectError:      true,
+			expectAllocated:  0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			scanner := mockScanner{
+				devices: tt.availableDevices,
+				config: &api.DevicePluginConfig{
+					UpperLimitPerDevice: tt.upperLimit,
+				},
+				findResults: map[string][]string{
+					"*": tt.availableDevices,
+				},
+			}
+
+			plugin := &plugin.PowerPlugin{
+				Scanner:     scanner,
+				Config:      scanner.config,
+				DeviceUsage: map[string]int{},
+			}
+			for k, v := range tt.initialUsage {
+				plugin.DeviceUsage[k] = v
+			}
+
+			allocated := 0
+			for i, devices := range tt.requested {
+				req := &pluginapi.AllocateRequest{
+					ContainerRequests: []*pluginapi.ContainerAllocateRequest{
+						{DevicesIDs: devices},
+					},
+				}
+				_, err := plugin.Allocate(context.Background(), req)
+				if err != nil {
+					if i < tt.expectAllocated {
+						t.Errorf("unexpected error on allocation %d: %v", i, err)
+					} else if !tt.expectError {
+						t.Errorf("unexpected allocation failure for %s", devices)
+					}
+				} else {
+					allocated++
+				}
+			}
+
+			if allocated != tt.expectAllocated {
+				t.Errorf("expected %d successful allocations, got %d", tt.expectAllocated, allocated)
+			}
+		})
+	}
+}

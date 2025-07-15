@@ -282,40 +282,48 @@ func (p *PowerPlugin) Allocate(ctx context.Context, reqs *pluginapi.AllocateRequ
 
 		ds := []*pluginapi.DeviceSpec{}
 		allocated := 0
+		skippedDueToLimit := 0
+		totalDevices := len(devices)
 
 		p.usageLock.Lock()
 		klog.Infof("Current device usage: %+v", p.DeviceUsage)
 		for _, dev := range devices {
-			count := p.DeviceUsage[dev]
+			devPath := dev
+			if !strings.HasPrefix(dev, "/dev/") {
+				devPath = "/dev/" + dev
+			}
+			count := p.DeviceUsage[devPath]
 			klog.Infof("Evaluating device %s: current usage=%d, limit=%d", dev, count, upperLimit)
 
 			if count < upperLimit {
-				p.DeviceUsage[dev]++
+				p.DeviceUsage[devPath]++
 				klog.Infof("Allocating device %s to container. New usage: %d", dev, p.DeviceUsage[dev])
 
 				ds = append(ds, &pluginapi.DeviceSpec{
-					HostPath:      "/dev/" + dev,
-					ContainerPath: "/dev/" + dev,
+					HostPath:      devPath,
+					ContainerPath: devPath,
 					// Per DeviceSpec:
 					// Cgroups permissions of the device, candidates are one or more of
 					// * r - allows container to read from the specified device.
 					// * w - allows container to write to the specified device.
 					// * m - allows container to create device files that do not yet exist.
 					// We don't need `m`
-					Permissions:   GetValidatedPermission(config),
+					Permissions: GetValidatedPermission(config),
 				})
 				allocated++
-
-				if allocated >= 1 { // Allocate 1 device per container
-					break
-				}
+				break // Allocate 1 device per container
 			} else {
-				klog.Infof("Device %s reached upper-limit; skipping", dev)
+				klog.Infof("Device %s reached upper-limit; marking skipped", dev)
+				skippedDueToLimit++
 			}
 		}
 		p.usageLock.Unlock()
 
 		if allocated == 0 {
+			if skippedDueToLimit == totalDevices {
+				klog.Errorf("All devices reached upper-limit; cannot allocate to container %d", i)
+				return nil, fmt.Errorf("upper limit per device reached for all devices for container %d", i)
+			}
 			klog.Errorf("Insufficient devices: requested=1, allocated=0 for container %d", i)
 			return nil, fmt.Errorf("not enough available devices to satisfy request for container %d", i)
 		}
