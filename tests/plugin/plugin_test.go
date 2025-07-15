@@ -453,11 +453,23 @@ func TestAllocate_UpperLimitScenarios(t *testing.T) {
 		{
 			name:             "All devices hit upper limit before allocation",
 			upperLimit:       1,
-			initialUsage: map[string]int{"/dev/sda": 1, "/dev/sdb": 1},
+			initialUsage:     map[string]int{"/dev/sda": 1, "/dev/sdb": 1},
 			availableDevices: []string{"/dev/sda", "/dev/sdb"},
 			requested:        [][]string{{"sda"}, {"sdb"}},
 			expectError:      true,
 			expectAllocated:  0,
+		},
+		{
+			name:             "All requested devices hit upper limit",
+			upperLimit:       1,
+			availableDevices: []string{"/dev/dm-0", "/dev/dm-1"},
+			initialUsage: map[string]int{
+				"/dev/dm-0": 1,
+				"/dev/dm-1": 1,
+			},
+			requested:       [][]string{{"dm-0"}, {"dm-1"}},
+			expectError:     true,
+			expectAllocated: 0,
 		},
 	}
 
