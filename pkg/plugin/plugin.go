@@ -626,7 +626,7 @@ func LoadDevicePluginConfig() (*api.DevicePluginConfig, error) {
 	if err != nil {
 		if os.IsNotExist(err) {
 			klog.Warningf("Config file not found at %s. Proceeding with default configuration.", configPath)
-			return &api.DevicePluginConfig{}, nil
+			return nil, nil
 		}
 		klog.Warningf("Unable to stat config file: %v", err)
 		return nil, err
