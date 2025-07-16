@@ -447,7 +447,11 @@ func ScanRootForDevicesWithDeps(scanner DeviceScanner, nxGzipEnabled bool) ([]st
 	}
 	if config == nil {
 		klog.Warning("ScanRootForDevices: config is nil, using empty config")
-		config = &api.DevicePluginConfig{}
+		config = &api.DevicePluginConfig{
+			NxGzip:            false,
+			DiscoveryStrategy: "default",
+			Permissions:       "rw",
+		}
 	}
 
 	// The logic to discover, include and exclude disks dynamically. Steps are indicated with numbers
