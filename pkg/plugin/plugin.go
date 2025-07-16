@@ -451,10 +451,7 @@ func ScanRootForDevicesWithDeps(scanner DeviceScanner, nxGzipEnabled bool) ([]st
 			NxGzip:            false,
 			DiscoveryStrategy: "default",
 			Permissions:       "rw",
-			IncludeDevices:    []string{"/dev/*"},
-			ExcludeDevices:    []string{"/dev/*"},
 		}
-
 	}
 
 	// The logic to discover, include and exclude disks dynamically. Steps are indicated with numbers
