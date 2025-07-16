@@ -451,8 +451,8 @@ func ScanRootForDevicesWithDeps(scanner DeviceScanner, nxGzipEnabled bool) ([]st
 			NxGzip:            false,
 			DiscoveryStrategy: "default",
 			Permissions:       "rw",
-			IncludeDevices:    []string{"*"},
-			ExcludeDevices:    []string{"*"},
+			IncludeDevices:    []string{"/dev/*"},
+			ExcludeDevices:    []string{"/dev/*"},
 		}
 
 	}
