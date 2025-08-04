@@ -1,4 +1,4 @@
-FROM registry.access.redhat.com/ubi9/ubi-minimal:9.6-1753762263
+FROM registry.access.redhat.com/ubi9/ubi-minimal:9.6-1754327153
 
 LABEL io.k8s.display-name="IBM Power Device Plugin"
 LABEL name="IBM Power Device Plugin"
