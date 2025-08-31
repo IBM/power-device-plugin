@@ -3,7 +3,7 @@ module github.com/ocp-power-demos/power-dev-plugin
 go 1.24.3
 
 require (
-	github.com/jaypipes/ghw v0.19.0
+	github.com/jaypipes/ghw v0.19.1
 	google.golang.org/grpc v1.75.0
 	k8s.io/klog v1.0.0
 	k8s.io/kubelet v0.33.4
@@ -19,7 +19,7 @@ require (
 	github.com/StackExchange/wmi v1.2.1 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
-	github.com/jaypipes/pcidb v1.1.0 // indirect
+	github.com/jaypipes/pcidb v1.1.1 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
