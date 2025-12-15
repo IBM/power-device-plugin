@@ -97,8 +97,6 @@ spec:
         - name: host-dev
           mountPath: /host/dev
           readOnly: true
-        serviceAccount: power-device-plugin
-        serviceAccountName: power-device-plugin
         securityContext:
           privileged: true
           capabilities:

@@ -88,8 +88,6 @@ spec:
           mountPath: /registration
         - name: dev-plugins
           mountPath: /var/lib/kubelet/device-plugins
-        serviceAccount: power-device-plugin
-        serviceAccountName: power-device-plugin
         securityContext:
           privileged: true
           capabilities:
