@@ -1,12 +1,12 @@
 module github.com/ocp-power-demos/power-dev-plugin
 
-go 1.24.3
+go 1.25.0
 
 require (
 	github.com/jaypipes/ghw v0.23.0
 	google.golang.org/grpc v1.78.0
 	k8s.io/klog v1.0.0
-	k8s.io/kubelet v0.34.3
+	k8s.io/kubelet v0.35.1
 )
 
 require (
