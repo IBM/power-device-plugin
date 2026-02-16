@@ -1,12 +1,12 @@
 module github.com/ocp-power-demos/power-dev-plugin
 
-go 1.24.3
+go 1.25.0
 
 require (
 	github.com/jaypipes/ghw v0.23.0
 	google.golang.org/grpc v1.79.1
 	k8s.io/klog v1.0.0
-	k8s.io/kubelet v0.34.3
+	k8s.io/kubelet v0.35.1
 )
 
 require (
@@ -16,12 +16,9 @@ require (
 )
 
 require (
-	github.com/StackExchange/wmi v1.2.1 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
-	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/jaypipes/pcidb v1.1.1 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
-	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/rogpeppe/go-internal v1.13.1 // indirect
 	github.com/stretchr/testify v1.11.1
