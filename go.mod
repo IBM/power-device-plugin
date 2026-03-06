@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/jaypipes/ghw v0.23.0
-	google.golang.org/grpc v1.79.1
+	google.golang.org/grpc v1.79.2
 	k8s.io/klog v1.0.0
 	k8s.io/kubelet v0.35.2
 )
