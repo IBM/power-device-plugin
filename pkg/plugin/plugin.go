@@ -331,11 +331,11 @@ func (p *PowerPlugin) Allocate(ctx context.Context, reqs *pluginapi.AllocateRequ
 		response := pluginapi.ContainerAllocateResponse{
 			Devices: ds,
 		}
-		klog.Infof("Allocate response for container %d: %+v", i, response)
+		klog.Infof("Allocate response for container %d: %+v", i, &response)
 		responses.ContainerResponses = append(responses.ContainerResponses, &response)
 	}
 
-	klog.Infof("Final Allocate response for all containers: %+v", responses)
+	klog.Infof("Final Allocate response for all containers: %+v", &responses)
 	return &responses, nil
 }
 
@@ -563,7 +563,7 @@ func (m *PowerPlugin) GetAllocateFunc() func(r *pluginapi.AllocateRequest, devs 
 
 		config, err := LoadDevicePluginConfig()
 		if err != nil {
-			klog.Warningf("Failed to load config: %v, err")
+			klog.Warningf("Failed to load config: %v", err)
 		}
 
 		var responses pluginapi.AllocateResponse
@@ -592,7 +592,7 @@ func (m *PowerPlugin) GetAllocateFunc() func(r *pluginapi.AllocateRequest, devs 
 			responses.ContainerResponses = append(responses.ContainerResponses, response)
 		}
 
-		klog.Infof("Get Allocate response: %v", responses)
+		klog.Infof("Get Allocate response: %v", &responses)
 		return &responses, nil
 	}
 }

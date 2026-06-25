@@ -387,9 +387,9 @@ func TestAllocateUpperLimit(t *testing.T) {
 	// Each container requests a device (same list returned from scanner)
 	req := &pluginapi.AllocateRequest{
 		ContainerRequests: []*pluginapi.ContainerAllocateRequest{
-			{DevicesIDs: []string{"sda"}},
-			{DevicesIDs: []string{"sdb"}},
-			{DevicesIDs: []string{"sda"}}, // this third one should exceed upperLimit
+			{DevicesIds: []string{"sda"}},
+			{DevicesIds: []string{"sdb"}},
+			{DevicesIds: []string{"sda"}}, // this third one should exceed upperLimit
 		},
 	}
 
@@ -402,7 +402,7 @@ func TestAllocateUpperLimit(t *testing.T) {
 	// Third should fail due to sda upperLimit = 1
 	_, err = plugin.Allocate(context.Background(), &pluginapi.AllocateRequest{
 		ContainerRequests: []*pluginapi.ContainerAllocateRequest{
-			{DevicesIDs: []string{"sda"}},
+			{DevicesIds: []string{"sda"}},
 		},
 	})
 	assert.Error(t, err, "Expected allocation to fail due to exceeding upper limit")
@@ -498,7 +498,7 @@ func TestAllocate_UpperLimitScenarios(t *testing.T) {
 			for i, devices := range tt.requested {
 				req := &pluginapi.AllocateRequest{
 					ContainerRequests: []*pluginapi.ContainerAllocateRequest{
-						{DevicesIDs: devices},
+						{DevicesIds: devices},
 					},
 				}
 				_, err := plugin.Allocate(context.Background(), req)
