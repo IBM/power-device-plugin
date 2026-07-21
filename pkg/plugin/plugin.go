@@ -446,11 +446,12 @@ func ScanRootForDevicesWithDeps(scanner DeviceScanner, nxGzipEnabled bool) ([]st
 		klog.Warningf("ScanRootForDevices: failed to load config, proceeding with default behavior: %v", err)
 	}
 	if config == nil {
-		klog.Warning("ScanRootForDevices: config is nil, using empty config")
+		klog.Warning("ScanRootForDevices: config is nil, using default config")
 		config = &api.DevicePluginConfig{
 			NxGzip:            false,
 			DiscoveryStrategy: "default",
 			Permissions:       "rw",
+			IncludeDevices:    []string{"/dev/dm-*", "/dev/sd-*"},
 		}
 	}
 
