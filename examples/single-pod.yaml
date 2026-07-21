@@ -1,0 +1,41 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ex-device-plugin
+  namespace: power-device-plugin
+  labels:
+    app: ex-device-plugin
+  annotations:
+    openshift.io/required-scc: 'hostmount-anyuid'
+spec:
+  containers:
+  - name: plugin
+    image: quay.io/powercloud/ocp4-power-workload-tools:main
+    imagePullPolicy: IfNotPresent
+    command: [ "/bin/sleep" ]
+    args: [ "infinity" ]
+    resources:
+      limits:
+        memory: 100Mi
+        power-dev-plugin/dev: 1
+      requests:
+        cpu: 100m
+        memory: 100Mi
+        power-dev-plugin/dev: 1
+    volumeMounts:
+    - name: test-vol
+      mountPath: /mnt
+    securityContext:
+      privileged: false
+      runAsUser: 1000
+      capabilities:
+        drop:
+          - ALL
+      runAsNonRoot: true
+      readOnlyRootFilesystem: true
+      allowPrivilegeEscalation: false
+  volumes:
+    - name: test-vol
+      hostPath:
+        path: /var/demo
+        type: DirectoryOrCreate
