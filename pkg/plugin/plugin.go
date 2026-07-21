@@ -311,7 +311,7 @@ func (p *PowerPlugin) Allocate(ctx context.Context, reqs *pluginapi.AllocateRequ
 					Permissions: GetValidatedPermission(config),
 				})
 				allocated++
-				break // Allocate 1 device per container
+				// If we were strict, we would allocate 1 device per container
 			} else {
 				klog.Infof("Device %s reached upper-limit; marking skipped", dev)
 				skippedDueToLimit++
