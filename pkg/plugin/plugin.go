@@ -271,7 +271,7 @@ func (p *PowerPlugin) Allocate(ctx context.Context, reqs *pluginapi.AllocateRequ
 
 	upperLimit := config.UpperLimitPerDevice
 	if upperLimit <= 0 {
-		upperLimit = 1 // default fallback
+		upperLimit = 100_000 // default: effectively unlimited
 	}
 	klog.Infof("Using upper-limit per device: %d", upperLimit)
 
