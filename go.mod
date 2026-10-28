@@ -6,7 +6,7 @@ require (
 	github.com/jaypipes/ghw v0.26.0
 	google.golang.org/grpc v1.85.0
 	k8s.io/klog v1.0.0
-	k8s.io/kubelet v0.37.1
+	k8s.io/kubelet v0.37.2
 )
 
 require golang.org/x/net v0.60.0 // indirect
