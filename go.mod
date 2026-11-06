@@ -3,7 +3,7 @@ module github.com/ocp-power-demos/power-dev-plugin
 go 1.26.0
 
 require (
-	github.com/jaypipes/ghw v0.26.0
+	github.com/jaypipes/ghw v0.27.0
 	google.golang.org/grpc v1.85.0
 	k8s.io/klog v1.0.0
 	k8s.io/kubelet v0.37.2
